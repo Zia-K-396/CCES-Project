@@ -333,57 +333,61 @@ def run_step():
                     bat[i] -= e
                     status[i] = "discharging"
 
-        # FIXED NIGHT-TIME USAGE PROFILE
-        # Slider changes must NEVER change the load/usage rate. They only
-        # change how much solar energy was available to charge the storage.
+        # NIGHT-TIME ENERGY DISPATCH
+        # The default case retains the original demonstration trajectory:
+        #   18:30 -> 80 MWh
+        #   00:00 -> ~55 MWh
+        #   05:30 -> ~8 MWh (~10%)
         #
-        # CCES therefore discharges at the same power profile every night:
-        #   18:30-00:00 : 25 MWh / 5.5 h
-        #   00:00-05:30 : 47 MWh / 5.5 h
-        #
-        # This gives the default cycle 80 -> ~55 MWh -> ~8 MWh.
-        # If poor solar leaves CCES with less energy, the same demand is still
-        # served; CCES simply reaches its 5% floor earlier and Li-ion supplies
-        # the remaining load. We do NOT slow CCES down to preserve its SOC.
+        # When environmental sliders are changed, the LOAD/USAGE RATE remains
+        # the same. We therefore use the same CCES power demand as the default
+        # trajectory, but do NOT reduce that demand to preserve CCES SOC.
+        # If CCES reaches 5%, Li-ion supplies the uncovered energy.
 
         t = st.session_state.sim_time
-        cces_min = 4.0  # 5% absolute reserve
+        cces_min = 4.0  # 5% hard minimum
 
+        # Exact default trajectory is retained for the default slider state.
+        # These values represent the intended normal-night CCES usage.
         if t >= 18.5:
-            cces_power = 25.0 / 5.5       # 4.55 MW
+            default_cces_power = 25.0 / 5.5
         else:
-            cces_power = 47.0 / 5.5       # 8.55 MW
+            default_cces_power = 47.0 / 5.5
 
-        # Convert the fixed delivery power to stored-energy withdrawal.
-        # If CCES reaches 5%, the deficit is transferred to Li-ion instead.
-        requested_e = cces_power * dt
+        requested_e = default_cces_power * dt
         available_e = max(0.0, st.session_state.cces - cces_min)
+
+        # Normal operation: CCES supplies the same energy requested by the
+        # load regardless of weather conditions.
         e = min(requested_e, available_e)
 
         if e > 0.0001:
             st.session_state.cces -= e
             cdis = e / max(dt, 1e-9) * .85
 
-        # Any remaining demand that CCES could not cover because it reached
-        # the 5% reserve is supplied by local Li-ion batteries.
-        remaining_cces_shortfall = max(0.0, requested_e - e)
-        if remaining_cces_shortfall > 0.0001:
+        # If CCES has reached the 5% reserve, Li-ion supplies the SAME
+        # remaining energy requirement. We do not alter the usage rate.
+        remaining_energy = max(0.0, requested_e - e)
+
+        if remaining_energy > 0.0001:
             total_available_bat = sum(max(0.0, b - 0.25) for b in bat)
 
             if total_available_bat > 0.0001:
                 for i in range(5):
-                    if total_available_bat <= 0:
+                    if total_available_bat <= 0.0001:
                         break
+
                     usable = max(0.0, bat[i] - 0.25)
                     if usable <= 0:
                         continue
 
-                    share = remaining_cces_shortfall * (usable / total_available_bat)
+                    share = remaining_energy * (usable / total_available_bat)
                     share = min(share, usable)
+
                     if share > 0.0001:
                         bat[i] -= share
                         status[i] = "discharging"
-                        total_available_bat -= usable
+                        total_available_bat -= share
 
     # Physical bounds only. No end-of-day SOC correction.
     st.session_state.bat = [max(0.0, min(4.0, x)) for x in bat]
