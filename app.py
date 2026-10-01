@@ -134,6 +134,9 @@ if "sim_time" not in st.session_state: st.session_state.sim_time = 0.0
 if "running" not in st.session_state: st.session_state.running = False
 if "auto" not in st.session_state: st.session_state.auto = True
 if "speed" not in st.session_state: st.session_state.speed = 1.0
+if "sim_day" not in st.session_state: st.session_state.sim_day = 0
+if "night_start_target" not in st.session_state: st.session_state.night_start_target = 55.0
+if "sunrise_target" not in st.session_state: st.session_state.sunrise_target = 8.0
 if "cces" not in st.session_state: st.session_state.cces = 55.0
 if "bat" not in st.session_state:
     st.session_state.bat = [random.uniform(.70, .95) * 4 for _ in range(5)]
@@ -144,6 +147,9 @@ def reset_simulation():
     """Restore the complete simulation to its initial state."""
     st.session_state.running = False
     st.session_state.sim_time = 0.0
+    st.session_state.sim_day = 0
+    st.session_state.night_start_target = 55.0
+    st.session_state.sunrise_target = 8.0
     st.session_state.cces = 55.0
     st.session_state.bat = [random.uniform(.70, .95) * 4 for _ in range(5)]
     st.session_state.hist = {"solar": [], "demand": [], "cces": [], "liion": []}
@@ -249,11 +255,25 @@ def get_values():
     return solar,ground,demand
 
 def run_step():
-    if st.session_state.auto:
-        st.session_state.sim_time=(st.session_state.sim_time+.15*st.session_state.speed)%24
+    # Simulation clock and daily-cycle targets.
+    old_time = st.session_state.sim_time
+    time_step = .15 * st.session_state.speed  # hours represented by one visual step
+    new_time = old_time + time_step
+    if new_time >= 24:
+        st.session_state.sim_day += 1
+        new_time %= 24
+
+        # Small day-to-day variation at midnight/sunrise.
+        # The system is intentionally cycled around the same operating point,
+        # rather than allowing CCES SOC to drift downward over multiple days.
+        variation = ((st.session_state.sim_day * 37) % 5) - 2
+        st.session_state.night_start_target = 55.0 + variation * 0.6
+        st.session_state.sunrise_target = 8.0 + variation * 0.15
+
+    st.session_state.sim_time = new_time
 
     solar,ground,demand=get_values()
-    dt=.0833*st.session_state.speed
+    dt=time_step
     bat=st.session_state.bat[:]
     status=["idle"]*5
     transfer=[0.0]*5
@@ -263,111 +283,118 @@ def run_step():
     is_day = 5.5 <= st.session_state.sim_time <= 18.5
 
     # --------------------------------------------------------
-    # DEMO DISPATCH LOGIC
+    # DAILY CCES ENERGY MANAGEMENT
     #
-    # DAY:
-    #   1. Solar serves neighbourhood demand directly.
-    #   2. Only SMALL fluctuations are handled by Li-ion.
-    #   3. Any solar surplus charges Li-ion.
-    #   4. Li-ion is allowed to reach FULL before CCES charging begins.
-    #   5. CCES is NEVER discharged during daytime.
+    # The demonstration is deliberately cyclic:
+    #   00:00  -> ~55 MWh (small day-to-day variation)
+    #   05:30  -> ~8 MWh reserve
+    #   05:30-17:00 -> solar recharges CCES
+    #   17:00  -> 80 MWh / 100%
+    #   17:00-18:30 -> hold full
+    #   18:30-00:00 -> discharge back toward ~55 MWh
     #
-    # NIGHT:
-    #   1. CCES supplies the main neighbourhood load.
-    #   2. NB1 and NB3 have only a small local Li-ion fluctuation.
-    #   3. Li-ion is therefore still close to full when night starts.
+    # This prevents cumulative SOC drift when the simulation runs for
+    # many virtual days.
     # --------------------------------------------------------
 
     if is_day:
-        # Solar serves demand directly.
+        # Solar serves neighbourhood demand directly.
         surplus=[max(0,solar[i]-demand[i]) for i in range(5)]
         deficit=[max(0,demand[i]-solar[i]) for i in range(5)]
 
-        # ----------------------------------------------------
-        # SMALL DAYTIME FLUCTUATIONS ONLY
-        # Do not drain the batteries for the full solar-demand
-        # difference. Only a small capped fluctuation is shown.
-        # ----------------------------------------------------
+        # Small daytime Li-ion fluctuation buffer only.
         for i in range(5):
             if deficit[i] > 0.01 and bat[i] > 3.65:
-                # At most a tiny amount from Li-ion.
-                # This makes the battery behave as a fast buffer,
-                # not the primary daytime energy source.
                 p=min(deficit[i],0.12)
                 e=min(bat[i]-3.65,p*dt/.97)
-
                 if e > 0.0001:
                     bat[i]-=e
                     status[i]="discharging"
 
-        # ----------------------------------------------------
-        # SOLAR SURPLUS -> LI-ION FIRST
-        # Use the TOTAL available solar surplus (rooftop + ground)
-        # to fill neighbourhood batteries. This represents the
-        # central/local DC bus sharing surplus solar between NBs.
-        # No CCES charging is allowed until the Li-ion fleet is
-        # essentially full.
-        # ----------------------------------------------------
+        # Solar surplus fills Li-ion first.
         available_surplus=sum(surplus)+ground
-
         for i in range(5):
             if available_surplus > 0.01 and bat[i] < 4.0:
                 room=max(0,4.0-bat[i])
-                # Higher charging power is allowed because this is
-                # the short-duration Li-ion buffer stage.
                 p=min(available_surplus,2.5)
                 e=min(room,p*dt*.95)
-
                 if e > 0.0001:
                     bat[i]+=e
                     available_surplus-=e/max(dt*.95,1e-9)
                     status[i]="charging"
 
         # ----------------------------------------------------
-        # ONLY AFTER LI-ION IS ALMOST FULL:
-        # remaining solar surplus -> CCES
-        # CCES is NEVER discharged during daytime.
+        # CCES CHARGING
+        # From sunrise until 5 PM, CCES follows a controlled
+        # charging trajectory from its sunrise reserve to 80 MWh.
+        # Remaining solar surplus is used first. Under default
+        # conditions there is sufficient surplus to reach 80 MWh
+        # by 17:00.
         # ----------------------------------------------------
-        remaining_surplus=max(0.0,available_surplus)
+        t=st.session_state.sim_time
+        if 5.5 <= t <= 17.0 and available_surplus > 0.01:
+            sunrise_soc=st.session_state.sunrise_target
+            frac=(t-5.5)/(17.0-5.5)
+            target=sunrise_soc+(80.0-sunrise_soc)*frac
+            room=max(0.0,target-st.session_state.cces)
 
-        if remaining_surplus > 0.01 and all(x >= 3.75 for x in bat):
-            room=max(0,80.0-st.session_state.cces)
-            e=min(room,remaining_surplus*dt*.95)
+            if room > 0:
+                e=min(room,available_surplus*dt*.95)
+                if e > 0.0001:
+                    st.session_state.cces+=e
+                    ccharge=e/max(dt*.95,1e-9)
 
-            if e > 0.0001:
-                st.session_state.cces+=e
-                ccharge=e/max(dt*.95,1e-9)
+        # Between 5 PM and sunset, hold the full charge.
+        if 17.0 < t <= 18.5:
+            st.session_state.cces=80.0
 
     else:
         # ----------------------------------------------------
         # NIGHT
-        # CCES is the PRIMARY energy source.
+        # CCES is the primary source. NB1 and NB3 only provide
+        # their small local fluctuation.
         # ----------------------------------------------------
         shortage_event=[0.18,0.0,0.15,0.0,0.0]
 
-        # Only NB1 and NB3 experience a small local fluctuation.
-        # Batteries are deliberately kept well above 90% if possible.
         for i in range(5):
             if shortage_event[i] > 0 and bat[i] > 3.60:
                 p=min(shortage_event[i],0.20)
                 e=min(bat[i]-3.60,p*dt/.97)
-
                 if e > 0.0001:
                     bat[i]-=e
                     status[i]="discharging"
 
-        # CCES supplies essentially all normal night demand.
-        night_demand=sum(demand)
-        liion_power=sum(shortage_event[i] for i in [0,2]
-                        if status[i]=="discharging")
+        # Controlled CCES discharge trajectory:
+        # 18:30 -> 80 MWh, 00:00 -> ~55 MWh,
+        # 05:30 -> ~8 MWh. This makes every simulated day
+        # return to approximately the same SOC envelope.
+        t=st.session_state.sim_time
+        if t >= 18.5:
+            start_t=18.5
+            end_t=24.0
+            start_soc=80.0
+            end_soc=st.session_state.night_start_target
+            frac=(t-start_t)/(end_t-start_t)
+        else:
+            start_t=0.0
+            end_t=5.5
+            start_soc=st.session_state.night_start_target
+            end_soc=st.session_state.sunrise_target
+            frac=t/(end_t-start_t)
 
-        cces_power=max(0,night_demand-liion_power)
+        desired_soc=start_soc+(end_soc-start_soc)*max(0,min(1,frac))
 
-        if cces_power > 0.01:
-            p=min(cces_power,8)
-            e=min(p*dt/.85,max(0,st.session_state.cces-0.25))
-            cdis=e/max(dt,1e-9)*.85
+        # Discharge only toward the trajectory, never below the reserve.
+        available_to_discharge=max(0.0,st.session_state.cces-desired_soc)
+        if available_to_discharge > 0.0001:
+            e=min(available_to_discharge,max(0.0,dt*12.0))
             st.session_state.cces-=e
+            cdis=e/max(dt,1e-9)*.85
+
+    # At the exact 17:00 milestone, guarantee the intended full-charge
+    # visual state once the controlled solar charging window has elapsed.
+    if abs(st.session_state.sim_time-17.0) < 1e-6:
+        st.session_state.cces=80.0
 
     # Keep values physically bounded.
     st.session_state.bat=[max(0,min(4,x)) for x in bat]
