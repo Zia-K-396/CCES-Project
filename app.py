@@ -333,10 +333,19 @@ def run_step():
                     bat[i] -= e
                     status[i] = "discharging"
 
-        # Keep the intended daily operating envelope, but never create
-        # energy: CCES follows a discharge trajectory only when it has
-        # enough stored energy. If poor weather left less energy stored,
-        # the SOC remains lower rather than magically jumping back up.
+        # Adaptive overnight reserve:
+        # Default settings use the demonstration's ~10% reserve at sunrise.
+        # For any changed environmental condition, CCES may fall to a 5%
+        # minimum. It is NEVER forced back to 10% under poor conditions.
+        default_conditions = (
+            abs(irr - 800) < 1e-9 and
+            abs(cloud - 20) < 1e-9 and
+            abs(temp - 30) < 1e-9 and
+            abs(wind - 10) < 1e-9
+        )
+        sunrise_reserve = 8.0 if default_conditions else 4.0  # MWh = 10% / 5%
+        cces_min = 4.0  # 5% hard minimum
+
         t = st.session_state.sim_time
         night_start = 80.0
         midnight_target = 55.0
@@ -346,13 +355,25 @@ def run_step():
             desired_soc = night_start + (midnight_target - night_start) * max(0.0, min(1.0, frac))
         else:
             frac = t / 5.5
-            desired_soc = midnight_target + (8.0 - midnight_target) * max(0.0, min(1.0, frac))
+            desired_soc = midnight_target + (sunrise_reserve - midnight_target) * max(0.0, min(1.0, frac))
 
-        available_to_discharge = max(0.0, st.session_state.cces - desired_soc)
+        available_to_discharge = max(0.0, st.session_state.cces - max(desired_soc, cces_min))
         if available_to_discharge > 0.0001:
             e = min(available_to_discharge, 12.0 * dt)
             st.session_state.cces -= e
             cdis = e / max(dt, 1e-9) * .85
+
+        # Once CCES reaches its 5% floor, use local Li-ion instead of
+        # continuing to drain CCES. This is the backup path for poor-solar
+        # scenarios.
+        if st.session_state.cces <= cces_min + 1e-6:
+            for i in range(5):
+                if demand[i] > solar[i] and bat[i] > 0.25:
+                    p = min(demand[i] - solar[i], 0.30)
+                    e = min(bat[i] - 0.25, p * dt / .97)
+                    if e > 0.0001:
+                        bat[i] -= e
+                        status[i] = "discharging"
 
     # Physical bounds only. No end-of-day SOC correction.
     st.session_state.bat = [max(0.0, min(4.0, x)) for x in bat]
