@@ -244,9 +244,9 @@ def solar_factor():
 
 def get_values():
     f=solar_factor()
-    rooftop_total=32*f
+    rooftop_total=34*f
     solar=[rooftop_total*x for x in [.185,.171,.218,.179,.197]]
-    ground=14*f
+    ground=16*f
     base=[4.6,4.0,4.4,4.3,4.1]
     t=st.session_state.sim_time
     k=.72 if t<6 else .82 if t<10 else .68 if t<16 else .90 if t<19 else 1.10
