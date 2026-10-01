@@ -572,12 +572,6 @@ html=f"""
     </div>
 
     <div class="bus"></div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px">
-      {''.join(f'<div class="solarbox"><b>NB {i+1}</b><br><span class="sub">4,000 consumers</span><br><span class="flowarrow {"blue" if data["status"][i]=="discharging" else "orange" if data["status"][i]=="charging" else "gray"}">{"↓" if data["status"][i]=="discharging" else "↑" if data["status"][i]=="charging" else "•"}</span></div>' for i in range(5))}
-    </div>
-    <div style="margin-top:9px;padding:7px;background:#f8fafc;border-radius:7px;text-align:center;font-size:9px;font-weight:800">
-      {"☀ SURPLUS: Solar → local demand → Li-ion → CCES" if total_solar>total_demand else "⚡ NIGHT: CCES supplies main load • NB1/NB3 Li-ion handles small local shortage"}
-    </div>
   </div>
 
   <div class="panel">
