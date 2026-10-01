@@ -49,11 +49,11 @@ div[data-testid="stMetricValue"] {font-size:18px !important;}
 # ============================================================
 # SESSION STATE
 # ============================================================
-if "sim_time" not in st.session_state: st.session_state.sim_time = 14.0
+if "sim_time" not in st.session_state: st.session_state.sim_time = 0.0
 if "running" not in st.session_state: st.session_state.running = False
 if "auto" not in st.session_state: st.session_state.auto = True
 if "speed" not in st.session_state: st.session_state.speed = 1.0
-if "cces" not in st.session_state: st.session_state.cces = 60.0
+if "cces" not in st.session_state: st.session_state.cces = 55.0
 if "bat" not in st.session_state:
     st.session_state.bat = [random.uniform(.70, .95) * 4 for _ in range(5)]
 if "hist" not in st.session_state:
@@ -102,7 +102,7 @@ with c2:
     st.markdown(f"""
     <div style="text-align:center;font-size:28px;font-weight:800;color:#10243e;margin:0">{dh}:{mm:02d} {ap}</div>
     <div style="margin:auto;text-align:center;background:#edf3f8;border-radius:7px;padding:4px;width:70%;font-size:10px;color:#64748b;font-weight:700">
-    {"Daytime - Solar Generation Active" if day else "Night - Storage Supply Mode"}
+    {"Daytime - Solar Generation Active" if day else "Night - CCES Supply Mode"}
     </div>
     """,unsafe_allow_html=True)
 
@@ -133,8 +133,8 @@ with c3:
     with b3:
         if st.button("↻ Reset",use_container_width=True):
             st.session_state.running=False
-            st.session_state.sim_time=14.0
-            st.session_state.cces=60.0
+            st.session_state.sim_time=0.0
+            st.session_state.cces=55.0
             st.session_state.bat=[random.uniform(.70,.95)*4 for _ in range(5)]
             st.session_state.hist={"solar":[],"demand":[],"cces":[],"liion":[]}
             st.rerun()
@@ -181,65 +181,139 @@ def run_step():
     ccharge=0.0
     cdis=0.0
 
-    surplus=[max(0,solar[i]-demand[i]) for i in range(5)]
-    deficit=[max(0,demand[i]-solar[i]) for i in range(5)]
+    is_day = 5.5 <= st.session_state.sim_time <= 18.5
 
-    # Local solar -> local load -> local Li-ion -> CCES.
-    for i in range(5):
-        if surplus[i] > 0:
-            room=4-bat[i]
-            p=min(surplus[i],1.2)
-            e=min(room,p*dt*.94)
-            actual=e/max(dt*.94,1e-9)
-            if room>.01:
-                bat[i]+=e
-                status[i]="charging"
-                surplus[i]-=actual
-            if surplus[i]>0: ccharge += surplus[i]
+    # --------------------------------------------------------
+    # DESIGN DEMO DISPATCH
+    #
+    # Day:
+    #   Solar -> local demand
+    #   surplus -> local Li-ion
+    #   once Li-ion is full -> CCES
+    #
+    # Night:
+    #   CCES supplies the main shortage
+    #   only NB1 and NB3 receive a SMALL local Li-ion support
+    #   event. This keeps the Li-ion SOC from falling rapidly.
+    # --------------------------------------------------------
 
-    # Local Li-ion -> local load.
-    for i in range(5):
-        if deficit[i] > 0:
-            available=max(0,bat[i]-.4)
-            p=min(deficit[i],1.5,available/max(dt,1e-9)*.95)
-            if p>0:
-                bat[i]-=p*dt/.95
-                deficit[i]-=p
-                status[i]="discharging"
+    if is_day:
+        # Local solar serves local demand first.
+        surplus=[max(0,solar[i]-demand[i]) for i in range(5)]
+        deficit=[max(0,demand[i]-solar[i]) for i in range(5)]
 
-    # Other neighbourhood Li-ion support.
-    donors=[i for i in range(5) if bat[i]>.70*4]
-    for r in range(5):
-        if deficit[r]<=.05: continue
-        for d in donors:
-            if d==r: continue
-            available=max(0,bat[d]-.50*4)
-            p=min(deficit[r],1.0,available/max(dt,1e-9)*.92)
-            if p>.01:
-                bat[d]-=p*dt/.92
-                bat[r]+=p*dt*.92
-                transfer[r]+=p
-                transfer[d]-=p
-                deficit[r]-=p
+        # Small local deficits are intentionally left to CCES.
+        # Li-ion is NOT discharged merely because solar is lower than demand.
+        for i in range(5):
+            if surplus[i] > 0:
+                room=max(0,4-bat[i])
 
-    # Remaining deficit -> CCES.
-    remain=sum(deficit)
-    if remain>.01:
-        p=min(remain,8)
-        e=min(p*dt/.85,max(0,st.session_state.cces-5))
-        cdis=e/max(dt,1e-9)*.85
-        st.session_state.cces-=e
+                # Charge Li-ion first. Cap the demonstration charging power
+                # so the visualisation clearly shows the battery filling.
+                p=min(surplus[i],1.2)
+                e=min(room,p*dt*.94)
 
-    # Ground solar + remaining surplus -> CCES.
-    ccharge += ground
-    if ccharge>0:
-        room=80-st.session_state.cces
-        e=min(room,ccharge*dt*.85)
-        st.session_state.cces+=e
-        ccharge=e/max(dt,1e-9)/.85
+                if e > 0.0001:
+                    bat[i]+=e
+                    surplus[i]-=e/max(dt*.94,1e-9)
+                    status[i]="charging"
+
+                # Once Li-ion is full, remaining solar goes to CCES.
+                if surplus[i] > 0.01:
+                    ccharge += surplus[i]
+
+        # Ground solar goes directly toward CCES.
+        ccharge += ground
+
+        # Charge CCES only after Li-ion charging has been attempted.
+        if ccharge > 0:
+            room=max(0,80-st.session_state.cces)
+            e=min(room,ccharge*dt*.85)
+            st.session_state.cces+=e
+            ccharge=e/max(dt*.85,1e-9)
+
+        # Remaining daytime shortage is supplied by CCES.
+        remaining=sum(deficit)
+        if remaining > 0.01:
+            p=min(remaining,8)
+            e=min(p*dt/.85,max(0,st.session_state.cces-0.5))
+            cdis=e/max(dt,1e-9)*.85
+            st.session_state.cces-=e
+
+    else:
+        # NIGHT:
+        # Create intentionally small local shortage events only in NB1/NB3.
+        # These are visual/demo events, not full battery discharge.
+        shortage_event=[0.22,0.0,0.18,0.0,0.0]
+
+        for i in range(5):
+            if shortage_event[i] > 0 and bat[i] > 0.60:
+                # Only a small amount of the local Li-ion battery is used.
+                p=min(shortage_event[i],0.35)
+                e=min(max(0,bat[i]-0.60),p*dt/.95)
+                if e > 0.0001:
+                    bat[i]-=e
+                    status[i]="discharging"
+
+        # CCES is the main night-time source.
+        # For the demo, the overnight energy reserve is deliberately
+        # scheduled so that CCES reaches ~10% SOC at sunrise.
+        #
+        # This means the story is:
+        # 12 AM -> CCES has useful stored energy
+        # night -> CCES discharges
+        # ~5:30 AM -> CCES reaches 10%
+        # daytime -> Li-ion charges first, then CCES charges
+        night_demand=sum(demand)
+
+        liion_power=0
+        for i in [0,2]:
+            if status[i]=="discharging":
+                liion_power += shortage_event[i]
+
+        cces_power=max(0,night_demand-liion_power)
+
+        if cces_power > 0.01:
+            # Target 8 MWh (10%) at the start of daytime.
+            target_soc=8.0
+
+            if st.session_state.sim_time < 5.5:
+                remaining_night_hours=max(0.15,5.5-st.session_state.sim_time)
+                available_energy=max(0,st.session_state.cces-target_soc)
+
+                # Discharge at the smaller of actual demand and the
+                # scheduled power required to arrive at exactly 10%.
+                scheduled_power=available_energy/remaining_night_hours
+                p=min(cces_power,scheduled_power,12.0)
+
+                e=min(p*dt/.85,max(0,st.session_state.cces-target_soc))
+                cdis=e/max(dt,1e-9)*.85
+                st.session_state.cces-=e
+            else:
+                # Daytime begins with the desired 10% reserve.
+                st.session_state.cces=max(target_soc,st.session_state.cces)
+
+        # If one of the non-event neighbourhoods is exceptionally short,
+        # CCES still handles it; their Li-ion is intentionally preserved.
+
+    # --------------------------------------------------------
+    # OPTIONAL CROSS-NEIGHBOUR SUPPORT
+    # Only active if NB1/NB3 event exceeds their local Li-ion response.
+    # In the normal demo this remains zero, which makes the dashboard
+    # easier to understand.
+    # --------------------------------------------------------
+    if not is_day:
+        for target in [0,2]:
+            if status[target]=="discharging" and bat[target] < 0.75:
+                donors=[j for j in range(5) if j not in [0,2] and bat[j] > 3.2]
+                if donors:
+                    donor=donors[0]
+                    transfer[target]+=0.05
+                    transfer[donor]-=0.05
 
     st.session_state.bat=[max(0,min(4,x)) for x in bat]
     st.session_state.cces=max(0,min(80,st.session_state.cces))
+
     st.session_state.hist["solar"].append(sum(solar)+ground)
     st.session_state.hist["demand"].append(sum(demand))
     st.session_state.hist["cces"].append(st.session_state.cces)
@@ -286,7 +360,9 @@ nb_html=""
 for i in range(5):
     stt=data["status"][i]
     frac=st.session_state.bat[i]/4
-    if demand[i] > solar[i]:
+    if data["status"][i]=="discharging":
+        middle=f'<div class="flowarrow blue">↑</div><div class="flowlabel blue">Li-ion → Consumers</div>'
+    elif demand[i] > solar[i]:
         middle=f'<div class="flowarrow blue">↑</div><div class="flowlabel blue">CCES → Consumers</div>'
     else:
         middle=f'<div class="flowarrow orange">↑</div><div class="flowlabel orange">Excess → CCES</div>'
@@ -466,7 +542,7 @@ html=f"""
       {''.join(f'<div class="solarbox"><b>NB {i+1}</b><br><span class="sub">4,000 consumers</span><br><span class="flowarrow {"blue" if data["status"][i]=="discharging" else "orange" if data["status"][i]=="charging" else "gray"}">{"↓" if data["status"][i]=="discharging" else "↑" if data["status"][i]=="charging" else "•"}</span></div>' for i in range(5))}
     </div>
     <div style="margin-top:9px;padding:7px;background:#f8fafc;border-radius:7px;text-align:center;font-size:9px;font-weight:800">
-      {"☀ SURPLUS: Solar → local demand → Li-ion → CCES" if total_solar>total_demand else "⚡ SHORTAGE: Local Li-ion → Other NB Li-ion support → CCES"}
+      {"☀ SURPLUS: Solar → local demand → Li-ion → CCES" if total_solar>total_demand else "⚡ NIGHT: CCES supplies main load • NB1/NB3 Li-ion handles small local shortage"}
     </div>
   </div>
 
