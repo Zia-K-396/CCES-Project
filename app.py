@@ -15,34 +15,68 @@ st.set_page_config(
 # ============================================================
 st.markdown("""
 <style>
-html, body, [class*="css"] {
-    font-family: Arial, Helvetica, sans-serif;
-}
-.block-container {
-    max-width: 1540px !important;
-    padding: 8px 8px 20px 8px !important;
-}
-header {visibility:hidden;}
-[data-testid="stToolbar"] {display:none;}
-[data-testid="stDecoration"] {display:none;}
-[data-testid="stStatusWidget"] {display:none;}
+html, body, [class*="css"] {font-family:Arial,Helvetica,sans-serif;}
+.block-container {max-width:1540px !important;padding:6px 8px 10px 8px !important;}
+header,[data-testid="stToolbar"],[data-testid="stDecoration"],[data-testid="stStatusWidget"]{display:none;}
 
-div[data-testid="stSlider"] {padding-top:0 !important; margin-top:-4px !important;}
-div[data-testid="stSlider"] label {font-size:11px !important;font-weight:700 !important;}
-div[data-testid="stSlider"] {margin-bottom:-9px !important;}
-div[data-testid="stButton"] button {
-    border-radius:8px !important;
-    font-weight:700 !important;
-    min-height:34px !important;
+div[data-testid="stSlider"]{padding-top:0 !important;margin-top:-4px !important;margin-bottom:-9px !important;}
+div[data-testid="stSlider"] label{font-size:10px !important;font-weight:700 !important;white-space:nowrap !important;}
+div[data-testid="stSlider"] [data-testid="stSliderValue"]{font-size:10px !important;}
+div[data-testid="stButton"] button{border-radius:8px !important;font-weight:700 !important;min-height:31px !important;padding:3px 5px !important;}
+div[data-testid="stProgress"]{height:7px !important;}
+
+.top-panel{border:1px solid #b9c7d8;border-radius:11px;background:#fff;padding:6px 12px 5px;box-sizing:border-box;}
+.env-panel,.control-panel{height:43px;}
+.top-title{font-size:17px;font-weight:800;color:#10243e;line-height:30px;}
+.top-title span{font-size:12px;}
+.env-units{display:grid;grid-template-columns:repeat(4,1fr);margin-top:0;color:#64748b;font-size:8px;text-align:center;}
+
+.time-panel{
+ height:126px;box-sizing:border-box;border:1px solid #7697bc;border-radius:11px;
+ padding:7px 14px 8px;color:#fff;
+ background:linear-gradient(135deg,#173b69 0%,#285f91 55%,#16365d 100%);
+ box-shadow:0 2px 7px rgba(15,42,72,.15);
 }
-div[data-testid="stProgress"] {height:8px !important;}
-div[data-testid="stMetric"] {
-    background:transparent !important;
-    padding:0 !important;
-}
-div[data-testid="stMetricLabel"] {font-size:11px !important;}
-div[data-testid="stMetricValue"] {font-size:18px !important;}
-.smallgap {height:2px;}
+.time-title{font-size:17px;font-weight:800;line-height:22px;margin-bottom:5px;}
+.time-track{position:relative;height:18px;border-radius:12px;background:linear-gradient(90deg,#182f58 0%,#58a5e5 35%,#ffd65a 50%,#58a5e5 65%,#182f58 100%);border:1px solid rgba(255,255,255,.45);}
+.time-sun{position:absolute;left:50%;top:-8px;transform:translateX(-50%);font-size:18px;}
+.time-marker{position:absolute;top:-3px;width:3px;height:24px;background:#fff;border-radius:2px;box-shadow:0 0 0 1px #173b69;}
+.time-labels{display:flex;justify-content:space-between;font-size:9px;font-weight:700;margin-top:2px;}
+.current-time{text-align:center;font-size:24px;font-weight:900;line-height:25px;margin-top:0;color:#fff;}
+.time-state{margin:2px auto 0;width:65%;text-align:center;padding:3px 5px;border-radius:6px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:8px;font-weight:800;letter-spacing:.2px;}
+.control-state{text-align:center;color:#64748b;font-size:9px;margin-top:4px;}
+
+/* Main dashboard */
+.dashboard{font-family:Arial,Helvetica,sans-serif;color:#10243e;background:#f4f7fb;}
+.panel{background:#fff;border:1px solid #b9c7d8;border-radius:11px;padding:8px 10px;box-sizing:border-box;}
+.main{display:grid;grid-template-columns:1.0fr 3.35fr 1.18fr;gap:7px;margin-top:5px;}
+.nbs{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:6px;}
+.charts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px;}
+.title{font-size:17px;font-weight:800;margin-bottom:7px;}
+.sub{font-size:10px;color:#64748b;}
+.kv{display:flex;justify-content:space-between;font-size:10px;margin:6px 0;}
+.bar{height:8px;background:#e6edf5;border-radius:6px;overflow:hidden;margin:4px 0 6px;}
+.bar i{display:block;height:100%;background:#16a34a;border-radius:6px;}
+.orangebar i{background:#f59e0b;}.bluebar i{background:#1677e8;}
+.solarbox,.flowbox{border:1px solid #b9c7d8;border-radius:9px;padding:9px;text-align:center;background:#fff;}
+.flowbox{min-height:75px;}.cces{min-height:165px;}.big{font-size:16px;font-weight:800;}
+.legend{font-size:8px;font-weight:800;margin-left:7px;}
+.green{color:#16a34a}.blue{color:#1677e8}.orange{color:#f59e0b}.red{color:#ef233c}.gray{color:#94a3b8}
+.flowrow{display:grid;grid-template-columns:1fr 1fr;gap:7px;align-items:center;}
+.bus{height:4px;background:#334155;border-radius:4px;margin:7px 0;}
+.nbcard{background:#fff;border:1px solid #b9c7d8;border-radius:10px;overflow:hidden;}
+.nbhead{padding:7px 9px;display:flex;align-items:center;gap:7px;font-size:12px;}
+.nb0{background:#ffd7d7}.nb1{background:#d8e9ff}.nb2{background:#dcfce7}.nb3{background:#fff0c2}.nb4{background:#eadcff}
+.house{font-size:22px;font-weight:900;}.nbhead small{font-size:8px;color:#334155;}
+.nbbody{padding:7px 9px;}.row{display:flex;justify-content:space-between;gap:4px;font-size:8px;margin:6px 0;}.row b{font-size:8px;}
+.badge{display:block;border-radius:6px;text-align:center;padding:4px;font-size:8px;font-weight:800;margin:5px 0;}
+.charge{background:#dcfce7;color:#16a34a}.discharge{background:#dbeafe;color:#1677e8}.idle{background:#eef2f7;color:#64748b}
+.pf{font-size:8px;font-weight:800;color:#64748b;margin-top:7px;}
+.flowgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;text-align:center;margin-top:2px;}
+.flowarrow{font-size:22px;line-height:21px;font-weight:900;}.flowgrid b{display:block;font-size:7px;}.flowgrid small{display:block;font-size:6px;color:#64748b;}
+.support{background:#fff7ed;color:#c2410c;border-radius:5px;text-align:center;padding:3px;font-size:6px;font-weight:800;margin-top:5px;}
+.chartbox{background:#fff;border:1px solid #b9c7d8;border-radius:9px;padding:5px;}.charttitle{font-size:9px;font-weight:800;margin-left:4px;}
+@media(max-width:1100px){.gridtop,.main{grid-template-columns:1fr}.nbs,.charts{grid-template-columns:repeat(2,1fr)}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -60,85 +94,95 @@ if "hist" not in st.session_state:
     st.session_state.hist = {"solar":[],"demand":[],"cces":[],"liion":[]}
 
 # ============================================================
-# TOP CONTROLS
+# TOP CONTROLS — compact single-screen layout
 # ============================================================
 c1, c2, c3 = st.columns([4.2, 3.25, 2.55], gap="small")
 
 with c1:
     st.markdown("""
-    <div style="border:1px solid #b9c7d8;border-radius:12px;background:#fff;padding:6px 12px 4px">
-    <div style="font-size:17px;font-weight:800;color:#10243e;margin-bottom:2px">
-    Environmental Conditions <span style="font-size:14px">(Affecting Solar Generation)</span>
-    </div></div>
+    <div class="top-panel env-panel">
+      <div class="top-title">Environmental Conditions <span>(Affecting Solar Generation)</span></div>
+    </div>
     """, unsafe_allow_html=True)
-    s1,s2 = st.columns([3.2,1])
-    with s1:
-        irr = st.slider("☀ Solar Irradiance",0,1000,800,10,
-                        help="Solar irradiance in W/m²")
-        cloud = st.slider("☁ Cloud Cover",0,100,20,1)
-        temp = st.slider("🌡 Ambient Temperature",0,50,30,1)
-        wind = st.slider("≋ Wind Speed",0,50,10,1)
-    with s2:
-        st.markdown("""
-        <div style="padding-top:27px;font-size:11px;color:#64748b;line-height:2.7">
-        <b>W/m²</b><br><b>%</b><br><b>°C</b><br><b>km/h</b>
-        </div>""",unsafe_allow_html=True)
+
+    e1, e2, e3, e4 = st.columns(4, gap="small")
+    with e1:
+        irr = st.slider("☀ Irradiance", 0, 1000, 800, 10)
+    with e2:
+        cloud = st.slider("☁ Cloud", 0, 100, 20, 1)
+    with e3:
+        temp = st.slider("🌡 Temp", 0, 50, 30, 1)
+    with e4:
+        wind = st.slider("≋ Wind", 0, 50, 10, 1)
+
+    st.markdown("""
+    <div class="env-units">
+      <span>W/m²</span><span>%</span><span>°C</span><span>km/h</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 with c2:
-    st.markdown("""
-    <div style="border:1px solid #7f9fc4;border-radius:12px;
-                background:linear-gradient(135deg,#173b69 0%,#285f91 55%,#16365d 100%);
-                padding:6px 14px 7px;text-align:center;color:white">
-    <div style="font-size:17px;font-weight:800;color:white;text-align:left">Time of Day</div>
-    </div>
-    """,unsafe_allow_html=True)
     t = st.session_state.sim_time
-    st.markdown("<div style=\"margin-top:-3px\"></div>",unsafe_allow_html=True)
-    st.progress(t/24)
-    st.markdown("""
-    <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#10243e">
-      <span>☾ 12 AM</span><span>☀ 12 PM</span><span>☾ 12 AM</span>
-    </div>
-    """,unsafe_allow_html=True)
-    hh=int(t); mm=int((t-hh)*60); ap="AM" if hh<12 else "PM"; dh=hh%12 or 12
+    hh = int(t)
+    mm = int((t-hh)*60)
+    ap = "AM" if hh < 12 else "PM"
+    dh = hh % 12 or 12
     day = 5.5 <= t <= 18.5
+
     st.markdown(f"""
-    <div style="text-align:center;font-size:25px;font-weight:800;color:#ffffff;margin:0">{dh}:{mm:02d} {ap}</div>
-    <div style="margin:auto;text-align:center;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:4px;width:72%;font-size:10px;color:#ffffff;font-weight:700">
-    {"Daytime - Solar Generation Active" if day else "Night - CCES Supply Mode"}
+    <div class="time-panel">
+      <div class="time-title">Time of Day</div>
+      <div class="time-track">
+        <div class="time-sun">☀</div>
+        <div class="time-marker" style="left:{(t/24)*100:.2f}%"></div>
+      </div>
+      <div class="time-labels">
+        <span>☾ 12 AM</span>
+        <span>☀ 12 PM</span>
+        <span>☾ 12 AM</span>
+      </div>
+      <div class="current-time">{dh}:{mm:02d} {ap}</div>
+      <div class="time-state">
+        {"DAYTIME · SOLAR GENERATION ACTIVE" if day else "NIGHT · CCES SUPPLY MODE"}
+      </div>
     </div>
-    """,unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 with c3:
     st.markdown("""
-    <div style="border:1px solid #b9c7d8;border-radius:12px;background:#fff;padding:6px 9px 7px">
-    <div style="font-size:20px;font-weight:800;color:#10243e;margin-bottom:5px">Simulation Control</div>
-    """,unsafe_allow_html=True)
-    # Automatic simulation only — no manual/automatic mode switch.
+    <div class="top-panel control-panel">
+      <div class="top-title">Simulation Control</div>
+    </div>
+    """, unsafe_allow_html=True)
+
     st.session_state.auto = True
-    st.session_state.speed=st.slider("Simulation Speed",.5,5.0,st.session_state.speed,.5)
-    b1,b2,b3=st.columns(3)
+    st.session_state.speed = st.slider(
+        "Simulation Speed", .5, 5.0, st.session_state.speed, .5
+    )
+
+    b1, b2, b3 = st.columns(3, gap="small")
     with b1:
-        if st.button("▶ Start",use_container_width=True):
-            st.session_state.running=True
+        if st.button("▶ Start", use_container_width=True):
+            st.session_state.running = True
             st.rerun()
     with b2:
-        if st.button("Ⅱ Pause",use_container_width=True):
-            st.session_state.running=False
+        if st.button("Ⅱ Pause", use_container_width=True):
+            st.session_state.running = False
             st.rerun()
     with b3:
-        if st.button("↻ Reset",use_container_width=True):
-            st.session_state.running=False
-            st.session_state.sim_time=0.0
-            st.session_state.cces=55.0
-            st.session_state.bat=[random.uniform(.70,.95)*4 for _ in range(5)]
-            st.session_state.hist={"solar":[],"demand":[],"cces":[],"liion":[]}
+        if st.button("↻ Reset", use_container_width=True):
+            st.session_state.running = False
+            st.session_state.sim_time = 0.0
+            st.session_state.cces = 55.0
+            st.session_state.bat = [random.uniform(.70, .95) * 4 for _ in range(5)]
+            st.session_state.hist = {"solar": [], "demand": [], "cces": [], "liion": []}
             st.rerun()
+
     st.markdown(f"""
-    <div style="font-size:10px;color:#64748b;text-align:center">
-    Automatic simulation &nbsp;•&nbsp; <b>{"RUNNING" if st.session_state.running else "PAUSED"}</b>
-    </div></div>
-    """,unsafe_allow_html=True)
+    <div class="control-state">
+      AUTOMATIC SIMULATION · <b>{"RUNNING" if st.session_state.running else "PAUSED"}</b>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ============================================================
 # SIMULATION
@@ -565,7 +609,7 @@ html=f"""
 </div>
 """
 
-components.html(html,height=675,scrolling=False)
+components.html(html,height=620,scrolling=False)
 
 # Automatic refresh.
 if st.session_state.running:
