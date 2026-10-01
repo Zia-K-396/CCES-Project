@@ -16,18 +16,18 @@ st.set_page_config(
 st.markdown("""
 <style>
 html, body, [class*="css"] {font-family:Arial,Helvetica,sans-serif;}
-.block-container {max-width:1540px !important;padding:4px 8px 6px 8px !important;}
+.block-container {max-width:1540px !important;padding:24px 10px 14px 10px !important;}
 header,[data-testid="stToolbar"],[data-testid="stDecoration"],[data-testid="stStatusWidget"]{display:none;}
 
-div[data-testid="stSlider"]{padding-top:0 !important;margin-top:-7px !important;margin-bottom:-13px !important;}
+div[data-testid="stSlider"]{padding-top:0 !important;margin-top:2px !important;margin-bottom:-4px !important;}
 div[data-testid="stSlider"] label{font-size:8px !important;font-weight:700 !important;white-space:nowrap !important;}
 div[data-testid="stSlider"] [data-testid="stSliderValue"]{font-size:10px !important;}
 div[data-testid="stButton"] button{border-radius:8px !important;font-weight:700 !important;min-height:27px !important;padding:2px 4px !important;}
 div[data-testid="stProgress"]{height:7px !important;}
 
 .top-panel{border:1px solid #b9c7d8;border-radius:9px;background:#fff;padding:4px 9px 3px;box-sizing:border-box;}
-.env-panel,.control-panel{height:34px;}
-.top-title{font-size:14px;font-weight:800;color:#10243e;line-height:25px;}
+.env-panel,.control-panel{height:40px;}
+.top-title{font-size:14px;font-weight:800;color:#10243e;line-height:29px;}
 .top-title span{font-size:10px;}
 .env-units{display:grid;grid-template-columns:repeat(4,1fr);margin-top:0;color:#64748b;font-size:8px;text-align:center;}
 
@@ -118,7 +118,7 @@ div[data-testid="stHorizontalBlock"] > div{
     min-width:0 !important;
 }
 .top-panel,.time-panel{
-    overflow:hidden;
+    overflow:visible;
 }
 @media(max-width:1100px){
  .gridtop,.main{grid-template-columns:1fr}
