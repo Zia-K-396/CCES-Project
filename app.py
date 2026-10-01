@@ -314,7 +314,7 @@ def run_step():
         # the CCES charging rate and final SOC.
         # ----------------------------------------------------
         if available_surplus > 0.01 and st.session_state.cces < 80.0:
-            charge_power = min(available_surplus, 8.0)  # MW compressor limit
+            charge_power = min(available_surplus, 14.0)  # MW compressor limit
             e = min(80.0 - st.session_state.cces, charge_power * dt * .90)
             if e > 0.0001:
                 st.session_state.cces += e
