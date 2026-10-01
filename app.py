@@ -153,13 +153,13 @@ with c1:
     """, unsafe_allow_html=True)
     e1, e2, e3, e4 = st.columns(4, gap="small")
     with e1:
-        irr = st.slider("☀ Irradiance", 0, 1000, 800, 10)
+        irr = st.slider("☀ Irradiance", 0, 1000, 800, 10, key="irr_slider")
     with e2:
-        cloud = st.slider("☁ Cloud", 0, 100, 20, 1)
+        cloud = st.slider("☁ Cloud", 0, 100, 20, 1, key="cloud_slider")
     with e3:
-        temp = st.slider("🌡 Temperature", 0, 50, 30, 1)
+        temp = st.slider("🌡 Temperature", 0, 50, 30, 1, key="temp_slider")
     with e4:
-        wind = st.slider("≋ Wind", 0, 50, 10, 1)
+        wind = st.slider("≋ Wind", 0, 50, 10, 1, key="wind_slider")
 
 with c2:
     t = st.session_state.sim_time
@@ -208,6 +208,7 @@ with c3:
             st.session_state.cces = 55.0
             st.session_state.bat = [random.uniform(.70, .95) * 4 for _ in range(5)]
             st.session_state.hist = {"solar": [], "demand": [], "cces": [], "liion": []}
+            st.session_state.reset_environment = True
             st.rerun()
 
     st.markdown(f'<div class="control-state">AUTO · <b>{"RUNNING" if st.session_state.running else "PAUSED"}</b></div>', unsafe_allow_html=True)
