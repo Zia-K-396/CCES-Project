@@ -330,13 +330,13 @@ def run_step():
         # ----------------------------------------------------
         remaining_surplus=max(0.0,available_surplus)
 
-        if remaining_surplus > 0.01 and all(x >= 3.90 for x in bat):
+        if remaining_surplus > 0.01 and all(x >= 3.75 for x in bat):
             room=max(0,80.0-st.session_state.cces)
-            e=min(room,remaining_surplus*dt*.85)
+            e=min(room,remaining_surplus*dt*.95)
 
             if e > 0.0001:
                 st.session_state.cces+=e
-                ccharge=e/max(dt*.85,1e-9)
+                ccharge=e/max(dt*.95,1e-9)
 
     else:
         # ----------------------------------------------------
