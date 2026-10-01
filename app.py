@@ -16,7 +16,7 @@ st.set_page_config(
 st.markdown("""
 <style>
 html, body, [class*="css"] {font-family:Arial,Helvetica,sans-serif;}
-.block-container {max-width:1540px !important;padding:24px 10px 14px 10px !important;}
+.block-container {max-width:1540px !important;padding:78px 10px 14px 10px !important;}
 header,[data-testid="stToolbar"],[data-testid="stDecoration"],[data-testid="stStatusWidget"]{display:none;}
 
 div[data-testid="stSlider"]{padding-top:0 !important;margin-top:2px !important;margin-bottom:-4px !important;}
