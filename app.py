@@ -16,35 +16,35 @@ st.set_page_config(
 st.markdown("""
 <style>
 html, body, [class*="css"] {font-family:Arial,Helvetica,sans-serif;}
-.block-container {max-width:1540px !important;padding:6px 8px 10px 8px !important;}
+.block-container {max-width:1540px !important;padding:4px 8px 6px 8px !important;}
 header,[data-testid="stToolbar"],[data-testid="stDecoration"],[data-testid="stStatusWidget"]{display:none;}
 
-div[data-testid="stSlider"]{padding-top:0 !important;margin-top:-4px !important;margin-bottom:-9px !important;}
-div[data-testid="stSlider"] label{font-size:10px !important;font-weight:700 !important;white-space:nowrap !important;}
+div[data-testid="stSlider"]{padding-top:0 !important;margin-top:-7px !important;margin-bottom:-13px !important;}
+div[data-testid="stSlider"] label{font-size:8px !important;font-weight:700 !important;white-space:nowrap !important;}
 div[data-testid="stSlider"] [data-testid="stSliderValue"]{font-size:10px !important;}
-div[data-testid="stButton"] button{border-radius:8px !important;font-weight:700 !important;min-height:31px !important;padding:3px 5px !important;}
+div[data-testid="stButton"] button{border-radius:8px !important;font-weight:700 !important;min-height:27px !important;padding:2px 4px !important;}
 div[data-testid="stProgress"]{height:7px !important;}
 
-.top-panel{border:1px solid #b9c7d8;border-radius:11px;background:#fff;padding:6px 12px 5px;box-sizing:border-box;}
-.env-panel,.control-panel{height:43px;}
-.top-title{font-size:17px;font-weight:800;color:#10243e;line-height:30px;}
-.top-title span{font-size:12px;}
+.top-panel{border:1px solid #b9c7d8;border-radius:9px;background:#fff;padding:4px 9px 3px;box-sizing:border-box;}
+.env-panel,.control-panel{height:34px;}
+.top-title{font-size:14px;font-weight:800;color:#10243e;line-height:25px;}
+.top-title span{font-size:10px;}
 .env-units{display:grid;grid-template-columns:repeat(4,1fr);margin-top:0;color:#64748b;font-size:8px;text-align:center;}
 
 .time-panel{
- height:126px;box-sizing:border-box;border:1px solid #7697bc;border-radius:11px;
- padding:7px 14px 8px;color:#fff;
+ height:104px;box-sizing:border-box;border:1px solid #7697bc;border-radius:9px;
+ padding:5px 11px 6px;color:#fff;
  background:linear-gradient(135deg,#173b69 0%,#285f91 55%,#16365d 100%);
  box-shadow:0 2px 7px rgba(15,42,72,.15);
 }
-.time-title{font-size:17px;font-weight:800;line-height:22px;margin-bottom:5px;}
-.time-track{position:relative;height:18px;border-radius:12px;background:linear-gradient(90deg,#182f58 0%,#58a5e5 35%,#ffd65a 50%,#58a5e5 65%,#182f58 100%);border:1px solid rgba(255,255,255,.45);}
-.time-sun{position:absolute;left:50%;top:-8px;transform:translateX(-50%);font-size:18px;}
-.time-marker{position:absolute;top:-3px;width:3px;height:24px;background:#fff;border-radius:2px;box-shadow:0 0 0 1px #173b69;}
-.time-labels{display:flex;justify-content:space-between;font-size:9px;font-weight:700;margin-top:2px;}
-.current-time{text-align:center;font-size:24px;font-weight:900;line-height:25px;margin-top:0;color:#fff;}
-.time-state{margin:2px auto 0;width:65%;text-align:center;padding:3px 5px;border-radius:6px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:8px;font-weight:800;letter-spacing:.2px;}
-.control-state{text-align:center;color:#64748b;font-size:9px;margin-top:4px;}
+.time-title{font-size:14px;font-weight:800;line-height:18px;margin-bottom:3px;}
+.time-track{position:relative;height:14px;border-radius:12px;background:linear-gradient(90deg,#182f58 0%,#58a5e5 35%,#ffd65a 50%,#58a5e5 65%,#182f58 100%);border:1px solid rgba(255,255,255,.45);}
+.time-sun{position:absolute;left:50%;top:-7px;transform:translateX(-50%);font-size:15px;}
+.time-marker{position:absolute;top:-3px;width:3px;height:20px;background:#fff;border-radius:2px;box-shadow:0 0 0 1px #173b69;}
+.time-labels{display:flex;justify-content:space-between;font-size:8px;font-weight:700;margin-top:2px;}
+.current-time{text-align:center;font-size:21px;font-weight:900;line-height:22px;margin-top:0;color:#fff;}
+.time-state{margin:1px auto 0;width:62%;text-align:center;padding:3px 5px;border-radius:6px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:7px;font-weight:800;letter-spacing:.1px;}
+.control-state{text-align:center;color:#64748b;font-size:8px;margin-top:2px;}
 
 /* Main dashboard */
 .dashboard{font-family:Arial,Helvetica,sans-serif;color:#10243e;background:#f4f7fb;}
@@ -55,28 +55,42 @@ div[data-testid="stProgress"]{height:7px !important;}
 .title{font-size:17px;font-weight:800;margin-bottom:7px;}
 .sub{font-size:10px;color:#64748b;}
 .kv{display:flex;justify-content:space-between;font-size:10px;margin:6px 0;}
-.bar{height:8px;background:#e6edf5;border-radius:6px;overflow:hidden;margin:4px 0 6px;}
+.bar{height:6px;background:#e6edf5;border-radius:6px;overflow:hidden;margin:4px 0 6px;}
 .bar i{display:block;height:100%;background:#16a34a;border-radius:6px;}
 .orangebar i{background:#f59e0b;}.bluebar i{background:#1677e8;}
-.solarbox,.flowbox{border:1px solid #b9c7d8;border-radius:9px;padding:9px;text-align:center;background:#fff;}
-.flowbox{min-height:75px;}.cces{min-height:165px;}.big{font-size:16px;font-weight:800;}
+.solarbox,.flowbox{border:1px solid #b9c7d8;border-radius:8px;padding:6px;text-align:center;background:#fff;}
+.flowbox{min-height:62px;}.cces{min-height:140px;}.big{font-size:16px;font-weight:800;}
 .legend{font-size:8px;font-weight:800;margin-left:7px;}
 .green{color:#16a34a}.blue{color:#1677e8}.orange{color:#f59e0b}.red{color:#ef233c}.gray{color:#94a3b8}
 .flowrow{display:grid;grid-template-columns:1fr 1fr;gap:7px;align-items:center;}
 .bus{height:4px;background:#334155;border-radius:4px;margin:7px 0;}
 .nbcard{background:#fff;border:1px solid #b9c7d8;border-radius:10px;overflow:hidden;}
-.nbhead{padding:7px 9px;display:flex;align-items:center;gap:7px;font-size:12px;}
+.nbhead{padding:5px 7px;display:flex;align-items:center;gap:7px;font-size:12px;}
 .nb0{background:#ffd7d7}.nb1{background:#d8e9ff}.nb2{background:#dcfce7}.nb3{background:#fff0c2}.nb4{background:#eadcff}
 .house{font-size:22px;font-weight:900;}.nbhead small{font-size:8px;color:#334155;}
-.nbbody{padding:7px 9px;}.row{display:flex;justify-content:space-between;gap:4px;font-size:8px;margin:6px 0;}.row b{font-size:8px;}
+.nbbody{padding:5px 7px;}.row{display:flex;justify-content:space-between;gap:4px;font-size:8px;margin:6px 0;}.row b{font-size:8px;}
 .badge{display:block;border-radius:6px;text-align:center;padding:4px;font-size:8px;font-weight:800;margin:5px 0;}
 .charge{background:#dcfce7;color:#16a34a}.discharge{background:#dbeafe;color:#1677e8}.idle{background:#eef2f7;color:#64748b}
 .pf{font-size:8px;font-weight:800;color:#64748b;margin-top:7px;}
 .flowgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;text-align:center;margin-top:2px;}
-.flowarrow{font-size:22px;line-height:21px;font-weight:900;}.flowgrid b{display:block;font-size:7px;}.flowgrid small{display:block;font-size:6px;color:#64748b;}
+.flowarrow{font-size:18px;line-height:18px;font-weight:900;}.flowgrid b{display:block;font-size:7px;}.flowgrid small{display:block;font-size:6px;color:#64748b;}
 .support{background:#fff7ed;color:#c2410c;border-radius:5px;text-align:center;padding:3px;font-size:6px;font-weight:800;margin-top:5px;}
 .chartbox{background:#fff;border:1px solid #b9c7d8;border-radius:9px;padding:5px;}.charttitle{font-size:9px;font-weight:800;margin-left:4px;}
-@media(max-width:1100px){.gridtop,.main{grid-template-columns:1fr}.nbs,.charts{grid-template-columns:repeat(2,1fr)}}
+/* Keep the top controls in one horizontal band on desktop. */
+div[data-testid="stHorizontalBlock"]{
+    flex-wrap:nowrap !important;
+    align-items:stretch !important;
+}
+div[data-testid="stHorizontalBlock"] > div{
+    min-width:0 !important;
+}
+.top-panel,.time-panel{
+    overflow:hidden;
+}
+@media(max-width:1100px){
+ .gridtop,.main{grid-template-columns:1fr}
+ .nbs,.charts{grid-template-columns:repeat(2,1fr)}
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -94,9 +108,9 @@ if "hist" not in st.session_state:
     st.session_state.hist = {"solar":[],"demand":[],"cces":[],"liion":[]}
 
 # ============================================================
-# TOP CONTROLS — compact single-screen layout
+# TOP CONTROLS — fixed compact 16:9 presentation band
 # ============================================================
-c1, c2, c3 = st.columns([4.2, 3.25, 2.55], gap="small")
+c1, c2, c3 = st.columns([4.25, 3.15, 2.60], gap="small")
 
 with c1:
     st.markdown("""
@@ -104,22 +118,15 @@ with c1:
       <div class="top-title">Environmental Conditions <span>(Affecting Solar Generation)</span></div>
     </div>
     """, unsafe_allow_html=True)
-
     e1, e2, e3, e4 = st.columns(4, gap="small")
     with e1:
         irr = st.slider("☀ Irradiance", 0, 1000, 800, 10)
     with e2:
         cloud = st.slider("☁ Cloud", 0, 100, 20, 1)
     with e3:
-        temp = st.slider("🌡 Temp", 0, 50, 30, 1)
+        temp = st.slider("🌡 Temperature", 0, 50, 30, 1)
     with e4:
         wind = st.slider("≋ Wind", 0, 50, 10, 1)
-
-    st.markdown("""
-    <div class="env-units">
-      <span>W/m²</span><span>%</span><span>°C</span><span>km/h</span>
-    </div>
-    """, unsafe_allow_html=True)
 
 with c2:
     t = st.session_state.sim_time
@@ -136,15 +143,9 @@ with c2:
         <div class="time-sun">☀</div>
         <div class="time-marker" style="left:{(t/24)*100:.2f}%"></div>
       </div>
-      <div class="time-labels">
-        <span>☾ 12 AM</span>
-        <span>☀ 12 PM</span>
-        <span>☾ 12 AM</span>
-      </div>
+      <div class="time-labels"><span>☾ 12 AM</span><span>☀ 12 PM</span><span>☾ 12 AM</span></div>
       <div class="current-time">{dh}:{mm:02d} {ap}</div>
-      <div class="time-state">
-        {"DAYTIME · SOLAR GENERATION ACTIVE" if day else "NIGHT · CCES SUPPLY MODE"}
-      </div>
+      <div class="time-state">{"DAY · SOLAR ACTIVE" if day else "NIGHT · CCES SUPPLY"}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -156,9 +157,7 @@ with c3:
     """, unsafe_allow_html=True)
 
     st.session_state.auto = True
-    st.session_state.speed = st.slider(
-        "Simulation Speed", .5, 5.0, st.session_state.speed, .5
-    )
+    st.session_state.speed = st.slider("Simulation Speed", .5, 5.0, st.session_state.speed, .5)
 
     b1, b2, b3 = st.columns(3, gap="small")
     with b1:
@@ -178,11 +177,7 @@ with c3:
             st.session_state.hist = {"solar": [], "demand": [], "cces": [], "liion": []}
             st.rerun()
 
-    st.markdown(f"""
-    <div class="control-state">
-      AUTOMATIC SIMULATION · <b>{"RUNNING" if st.session_state.running else "PAUSED"}</b>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<div class="control-state">AUTO · <b>{"RUNNING" if st.session_state.running else "PAUSED"}</b></div>', unsafe_allow_html=True)
 
 # ============================================================
 # SIMULATION
@@ -452,9 +447,9 @@ def chart_svg(title, values, color, ymax, unit):
     if not values:
         values=[0,0]
     vals=values[-96:]
-    w,h=360,145
-    left,top=36,26
-    pw,ph=306,94
+    w,h=360,120
+    left,top=30,20
+    pw,ph=320,78
     pts=[]
     for j,v in enumerate(vals):
         x=left+(j/max(1,len(vals)-1))*pw
@@ -464,13 +459,13 @@ def chart_svg(title, values, color, ymax, unit):
     return f"""
     <div class="chartbox">
       <div class="charttitle">{title}</div>
-      <svg viewBox="0 0 {w} {h}" width="100%" height="145">
+      <svg viewBox="0 0 {w} {h}" width="100%" height="120">
         <line x1="{left}" y1="{top+ph}" x2="{left+pw}" y2="{top+ph}" stroke="#dbe4ee"/>
         <line x1="{left}" y1="{top}" x2="{left}" y2="{top+ph}" stroke="#dbe4ee"/>
         <polyline points="{poly}" fill="none" stroke="{color}" stroke-width="3"/>
-        <text x="{left}" y="138" font-size="9" fill="#64748b">12 AM</text>
-        <text x="{left+pw/2}" y="138" font-size="9" fill="#64748b" text-anchor="middle">12 PM</text>
-        <text x="{left+pw}" y="138" font-size="9" fill="#64748b" text-anchor="end">12 AM</text>
+        <text x="{left}" y="116" font-size="9" fill="#64748b">12 AM</text>
+        <text x="{left+pw/2}" y="116" font-size="9" fill="#64748b" text-anchor="middle">12 PM</text>
+        <text x="{left+pw}" y="116" font-size="9" fill="#64748b" text-anchor="end">12 AM</text>
       </svg>
     </div>
     """
@@ -609,7 +604,7 @@ html=f"""
 </div>
 """
 
-components.html(html,height=620,scrolling=False)
+components.html(html,height=600,scrolling=False)
 
 # Automatic refresh.
 if st.session_state.running:
