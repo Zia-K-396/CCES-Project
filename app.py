@@ -639,7 +639,7 @@ html=f"""
 </div>
 """
 
-components.html(html,height=600,scrolling=False)
+components.html(html,height=900,scrolling=False)
 
 # Automatic refresh.
 if st.session_state.running:
