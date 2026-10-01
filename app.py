@@ -27,9 +27,9 @@ header {visibility:hidden;}
 [data-testid="stDecoration"] {display:none;}
 [data-testid="stStatusWidget"] {display:none;}
 
-div[data-testid="stSlider"] {padding-top:0 !important;}
+div[data-testid="stSlider"] {padding-top:0 !important; margin-top:-4px !important;}
 div[data-testid="stSlider"] label {font-size:11px !important;font-weight:700 !important;}
-div[data-testid="stSlider"] {margin-bottom:-4px !important;}
+div[data-testid="stSlider"] {margin-bottom:-9px !important;}
 div[data-testid="stButton"] button {
     border-radius:8px !important;
     font-weight:700 !important;
@@ -66,8 +66,8 @@ c1, c2, c3 = st.columns([4.2, 3.25, 2.55], gap="small")
 
 with c1:
     st.markdown("""
-    <div style="border:1px solid #b9c7d8;border-radius:12px;background:#fff;padding:8px 14px 7px">
-    <div style="font-size:20px;font-weight:800;color:#10243e;margin-bottom:3px">
+    <div style="border:1px solid #b9c7d8;border-radius:12px;background:#fff;padding:6px 12px 4px">
+    <div style="font-size:17px;font-weight:800;color:#10243e;margin-bottom:2px">
     Environmental Conditions <span style="font-size:14px">(Affecting Solar Generation)</span>
     </div></div>
     """, unsafe_allow_html=True)
@@ -86,11 +86,14 @@ with c1:
 
 with c2:
     st.markdown("""
-    <div style="border:1px solid #b9c7d8;border-radius:12px;background:#fff;padding:8px 18px 11px;text-align:center">
-    <div style="font-size:20px;font-weight:800;color:#10243e;text-align:left">Time of Day</div>
+    <div style="border:1px solid #7f9fc4;border-radius:12px;
+                background:linear-gradient(135deg,#173b69 0%,#285f91 55%,#16365d 100%);
+                padding:6px 14px 7px;text-align:center;color:white">
+    <div style="font-size:17px;font-weight:800;color:white;text-align:left">Time of Day</div>
     </div>
     """,unsafe_allow_html=True)
     t = st.session_state.sim_time
+    st.markdown("<div style=\"margin-top:-3px\"></div>",unsafe_allow_html=True)
     st.progress(t/24)
     st.markdown("""
     <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#10243e">
@@ -100,27 +103,20 @@ with c2:
     hh=int(t); mm=int((t-hh)*60); ap="AM" if hh<12 else "PM"; dh=hh%12 or 12
     day = 5.5 <= t <= 18.5
     st.markdown(f"""
-    <div style="text-align:center;font-size:28px;font-weight:800;color:#10243e;margin:0">{dh}:{mm:02d} {ap}</div>
-    <div style="margin:auto;text-align:center;background:#edf3f8;border-radius:7px;padding:4px;width:70%;font-size:10px;color:#64748b;font-weight:700">
+    <div style="text-align:center;font-size:25px;font-weight:800;color:#ffffff;margin:0">{dh}:{mm:02d} {ap}</div>
+    <div style="margin:auto;text-align:center;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:4px;width:72%;font-size:10px;color:#ffffff;font-weight:700">
     {"Daytime - Solar Generation Active" if day else "Night - CCES Supply Mode"}
     </div>
     """,unsafe_allow_html=True)
 
 with c3:
     st.markdown("""
-    <div style="border:1px solid #b9c7d8;border-radius:12px;background:#fff;padding:8px 10px 10px">
+    <div style="border:1px solid #b9c7d8;border-radius:12px;background:#fff;padding:6px 9px 7px">
     <div style="font-size:20px;font-weight:800;color:#10243e;margin-bottom:5px">Simulation Control</div>
     """,unsafe_allow_html=True)
-    b1,b2=st.columns(2)
-    with b1:
-        if st.button("Manual Control",use_container_width=True):
-            st.session_state.auto=False
-            st.rerun()
-    with b2:
-        if st.button("Automatic Simulation",use_container_width=True):
-            st.session_state.auto=True
-            st.rerun()
-    st.session_state.speed=st.slider("Simulation Speed (Auto)",.5,5.0,st.session_state.speed,.5)
+    # Automatic simulation only — no manual/automatic mode switch.
+    st.session_state.auto = True
+    st.session_state.speed=st.slider("Simulation Speed",.5,5.0,st.session_state.speed,.5)
     b1,b2,b3=st.columns(3)
     with b1:
         if st.button("▶ Start",use_container_width=True):
@@ -140,8 +136,7 @@ with c3:
             st.rerun()
     st.markdown(f"""
     <div style="font-size:10px;color:#64748b;text-align:center">
-    Mode: <b>{"Automatic" if st.session_state.auto else "Manual"}</b>
-    &nbsp;•&nbsp; <b>{"RUNNING" if st.session_state.running else "PAUSED"}</b>
+    Automatic simulation &nbsp;•&nbsp; <b>{"RUNNING" if st.session_state.running else "PAUSED"}</b>
     </div></div>
     """,unsafe_allow_html=True)
 
@@ -450,11 +445,11 @@ else:
 html=f"""
 <style>
 .dashboard{{font-family:Arial,Helvetica,sans-serif;color:#10243e;background:#f4f7fb}}
-.panel{{background:#fff;border:1px solid #b9c7d8;border-radius:12px;padding:12px;box-sizing:border-box}}
+.panel{{background:#fff;border:1px solid #b9c7d8;border-radius:11px;padding:9px 11px;box-sizing:border-box}}
 .gridtop{{display:grid;grid-template-columns:1.7fr 2.0fr 1.25fr;gap:8px}}
-.main{{display:grid;grid-template-columns:1.0fr 3.35fr 1.18fr;gap:8px;margin-top:8px}}
-.nbs{{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:8px}}
-.charts{{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:8px}}
+.main{{display:grid;grid-template-columns:1.0fr 3.35fr 1.18fr;gap:7px;margin-top:6px}}
+.nbs{{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:6px}}
+.charts{{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}}
 .title{{font-size:18px;font-weight:800;margin-bottom:10px}}
 .sub{{font-size:11px;color:#64748b}}
 .kv{{display:flex;justify-content:space-between;font-size:11px;margin:9px 0}}
@@ -463,8 +458,8 @@ html=f"""
 .orangebar i{{background:#f59e0b}}
 .bluebar i{{background:#1677e8}}
 .solarbox,.flowbox{{border:1px solid #b9c7d8;border-radius:10px;padding:12px;text-align:center;background:#fff}}
-.flowbox{{min-height:105px}}
-.cces{{min-height:240px}}
+.flowbox{{min-height:82px}}
+.cces{{min-height:190px}}
 .big{{font-size:17px;font-weight:800}}
 .legend{{font-size:9px;font-weight:800;margin-left:10px}}
 .green{{color:#16a34a}} .blue{{color:#1677e8}} .orange{{color:#f59e0b}} .red{{color:#ef233c}} .gray{{color:#94a3b8}}
@@ -499,11 +494,11 @@ html=f"""
 <div class="main">
   <div>
     <div class="panel">
-      <div class="title">Rooftop Solar (All Houses)</div>
+      <div class="title">Total Solar Generation</div>
       <div class="kv"><span>Total Rooftop Capacity</span><b>28 MW</b></div>
-      <div class="kv"><span>Current Generation</span><b>{sum(solar):.1f} MW</b></div>
-      <div class="bar orangebar"><i style="width:{min(100,sum(solar)/28*100):.1f}%"></i></div>
-      <div style="text-align:right;font-size:9px;color:#64748b">{sum(solar)/28*100:.0f}%</div>
+      <div class="kv"><span>Total Solar Generation</span><b>{total_solar:.1f} MW</b></div>
+      <div class="bar orangebar"><i style="width:{min(100,total_solar/40*100):.1f}%"></i></div>
+      <div style="text-align:right;font-size:9px;color:#64748b">{total_solar/40*100:.0f}% of 40 MW total capacity</div>
     </div>
     <div class="panel" style="margin-top:8px">
       <div class="title">Solar Farm (CCES Ground)</div>
@@ -570,7 +565,7 @@ html=f"""
 </div>
 """
 
-components.html(html,height=790,scrolling=False)
+components.html(html,height=675,scrolling=False)
 
 # Automatic refresh.
 if st.session_state.running:
