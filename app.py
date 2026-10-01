@@ -333,39 +333,33 @@ def run_step():
                     bat[i] -= e
                     status[i] = "discharging"
 
-        # Adaptive overnight reserve:
-        # Default settings use the demonstration's ~10% reserve at sunrise.
-        # For any changed environmental condition, CCES may fall to a 5%
-        # minimum. It is NEVER forced back to 10% under poor conditions.
-        default_conditions = (
-            abs(irr - 800) < 1e-9 and
-            abs(cloud - 20) < 1e-9 and
-            abs(temp - 30) < 1e-9 and
-            abs(wind - 10) < 1e-9
-        )
-        sunrise_reserve = 8.0 if default_conditions else 4.0  # MWh = 10% / 5%
-        cces_min = 4.0  # 5% hard minimum
-
+        # Fixed overnight usage profile.
+        # Environmental sliders do NOT change how much energy the loads use.
+        # They only change solar generation, so the CCES SOC responds naturally.
+        # CCES may discharge down to 5% (4 MWh), then Li-ion takes over.
         t = st.session_state.sim_time
         night_start = 80.0
         midnight_target = 55.0
+        cces_min = 4.0  # 5% absolute reserve
 
         if t >= 18.5:
             frac = (t - 18.5) / 5.5
             desired_soc = night_start + (midnight_target - night_start) * max(0.0, min(1.0, frac))
         else:
             frac = t / 5.5
-            desired_soc = midnight_target + (sunrise_reserve - midnight_target) * max(0.0, min(1.0, frac))
+            desired_soc = midnight_target + (8.0 - midnight_target) * max(0.0, min(1.0, frac))
 
+        # Do not modify the target according to irradiance/cloud/etc.
+        # If CCES has less energy because of poor solar, it simply reaches
+        # the 5% floor earlier and the Li-ion backup supplies the rest.
         available_to_discharge = max(0.0, st.session_state.cces - max(desired_soc, cces_min))
         if available_to_discharge > 0.0001:
             e = min(available_to_discharge, 12.0 * dt)
             st.session_state.cces -= e
             cdis = e / max(dt, 1e-9) * .85
 
-        # Once CCES reaches its 5% floor, use local Li-ion instead of
-        # continuing to drain CCES. This is the backup path for poor-solar
-        # scenarios.
+        # At 5% CCES reserve, switch to Li-ion rather than changing the
+        # load/usage rate or artificially preserving CCES energy.
         if st.session_state.cces <= cces_min + 1e-6:
             for i in range(5):
                 if demand[i] > solar[i] and bat[i] > 0.25:
