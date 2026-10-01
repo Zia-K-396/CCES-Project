@@ -244,9 +244,9 @@ def solar_factor():
 
 def get_values():
     f=solar_factor()
-    rooftop_total=28*f
+    rooftop_total=32*f
     solar=[rooftop_total*x for x in [.185,.171,.218,.179,.197]]
-    ground=12*f
+    ground=14*f
     base=[4.6,4.0,4.4,4.3,4.1]
     t=st.session_state.sim_time
     k=.72 if t<6 else .82 if t<10 else .68 if t<16 else .90 if t<19 else 1.10
@@ -255,167 +255,125 @@ def get_values():
     return solar,ground,demand
 
 def run_step():
-    # Simulation clock and daily-cycle targets.
+    # Advance the simulation clock. Energy changes are calculated from the
+    # actual solar surplus/deficit at this timestep -- no artificial SOC jumps.
     old_time = st.session_state.sim_time
-    time_step = .15 * st.session_state.speed  # hours represented by one visual step
+    time_step = .15 * st.session_state.speed
     new_time = old_time + time_step
     if new_time >= 24:
         st.session_state.sim_day += 1
         new_time %= 24
 
-        # Small day-to-day variation at midnight/sunrise.
-        # The system is intentionally cycled around the same operating point,
-        # rather than allowing CCES SOC to drift downward over multiple days.
-        variation = ((st.session_state.sim_day * 37) % 5) - 2
-        st.session_state.night_start_target = 55.0 + variation * 0.6
-        st.session_state.sunrise_target = 8.0 + variation * 0.15
-
     st.session_state.sim_time = new_time
 
-    solar,ground,demand=get_values()
-    dt=time_step
-    bat=st.session_state.bat[:]
-    status=["idle"]*5
-    transfer=[0.0]*5
-    ccharge=0.0
-    cdis=0.0
+    solar, ground, demand = get_values()
+    dt = time_step
+    bat = st.session_state.bat[:]
+    status = ["idle"] * 5
+    transfer = [0.0] * 5
+    ccharge = 0.0
+    cdis = 0.0
 
     is_day = 5.5 <= st.session_state.sim_time <= 18.5
 
-    # --------------------------------------------------------
-    # DAILY CCES ENERGY MANAGEMENT
-    #
-    # The demonstration is deliberately cyclic:
-    #   00:00  -> ~55 MWh (small day-to-day variation)
-    #   05:30  -> ~8 MWh reserve
-    #   05:30-17:00 -> solar recharges CCES
-    #   17:00  -> 80 MWh / 100%
-    #   17:00-18:30 -> hold full
-    #   18:30-00:00 -> discharge back toward ~55 MWh
-    #
-    # This prevents cumulative SOC drift when the simulation runs for
-    # many virtual days.
-    # --------------------------------------------------------
-
     if is_day:
-        # Solar serves neighbourhood demand directly.
-        surplus=[max(0,solar[i]-demand[i]) for i in range(5)]
-        deficit=[max(0,demand[i]-solar[i]) for i in range(5)]
+        # Solar directly serves each neighbourhood first.
+        surplus = [max(0.0, solar[i] - demand[i]) for i in range(5)]
+        deficit = [max(0.0, demand[i] - solar[i]) for i in range(5)]
 
-        # Small daytime Li-ion fluctuation buffer only.
+        # Only small daytime fluctuations are handled by Li-ion.
         for i in range(5):
             if deficit[i] > 0.01 and bat[i] > 3.65:
-                p=min(deficit[i],0.12)
-                e=min(bat[i]-3.65,p*dt/.97)
+                p = min(deficit[i], 0.12)
+                e = min(bat[i] - 3.65, p * dt / .97)
                 if e > 0.0001:
-                    bat[i]-=e
-                    status[i]="discharging"
+                    bat[i] -= e
+                    status[i] = "discharging"
 
-        # Solar surplus fills Li-ion first.
-        available_surplus=sum(surplus)+ground
+        # Solar surplus charges Li-ion first.
+        available_surplus = sum(surplus) + ground
         for i in range(5):
             if available_surplus > 0.01 and bat[i] < 4.0:
-                room=max(0,4.0-bat[i])
-                p=min(available_surplus,2.5)
-                e=min(room,p*dt*.95)
+                room = 4.0 - bat[i]
+                p = min(available_surplus, 2.5)
+                e = min(room, p * dt * .95)
                 if e > 0.0001:
-                    bat[i]+=e
-                    available_surplus-=e/max(dt*.95,1e-9)
-                    status[i]="charging"
+                    bat[i] += e
+                    available_surplus -= e / max(dt * .95, 1e-9)
+                    status[i] = "charging"
 
         # ----------------------------------------------------
-        # CCES CHARGING
-        # From sunrise until 5 PM, CCES follows a controlled
-        # charging trajectory from its sunrise reserve to 80 MWh.
-        # Remaining solar surplus is used first. Under default
-        # conditions there is sufficient surplus to reach 80 MWh
-        # by 17:00.
+        # CCES: ONLY REAL SOLAR SURPLUS CHARGES IT.
+        #
+        # There is deliberately NO target-SOC interpolation and NO
+        # "fill to 80 MWh at 5 PM" command. Under default conditions,
+        # the modeled solar resource is sized so the real surplus
+        # gradually raises CCES to ~80 MWh by around 5 PM.
+        #
+        # Changing irradiance/cloud cover therefore directly changes
+        # the CCES charging rate and final SOC.
         # ----------------------------------------------------
-        t=st.session_state.sim_time
-        if 5.5 <= t <= 17.0 and available_surplus > 0.01:
-            sunrise_soc=st.session_state.sunrise_target
-            frac=(t-5.5)/(17.0-5.5)
-            target=sunrise_soc+(80.0-sunrise_soc)*frac
-            room=max(0.0,target-st.session_state.cces)
-
-            if room > 0:
-                e=min(room,available_surplus*dt*.95)
-                if e > 0.0001:
-                    st.session_state.cces+=e
-                    ccharge=e/max(dt*.95,1e-9)
-
-        # Between 5 PM and sunset, hold the full charge.
-        if 17.0 < t <= 18.5:
-            st.session_state.cces=80.0
+        if available_surplus > 0.01 and st.session_state.cces < 80.0:
+            charge_power = min(available_surplus, 8.0)  # MW compressor limit
+            e = min(80.0 - st.session_state.cces, charge_power * dt * .90)
+            if e > 0.0001:
+                st.session_state.cces += e
+                ccharge = e / max(dt * .90, 1e-9)
 
     else:
-        # ----------------------------------------------------
-        # NIGHT
-        # CCES is the primary source. NB1 and NB3 only provide
-        # their small local fluctuation.
-        # ----------------------------------------------------
-        shortage_event=[0.18,0.0,0.15,0.0,0.0]
+        # Night: CCES is the primary source.
+        # NB1/NB3 provide only small local fluctuations.
+        shortage_event = [0.18, 0.0, 0.15, 0.0, 0.0]
 
         for i in range(5):
             if shortage_event[i] > 0 and bat[i] > 3.60:
-                p=min(shortage_event[i],0.20)
-                e=min(bat[i]-3.60,p*dt/.97)
+                p = min(shortage_event[i], 0.20)
+                e = min(bat[i] - 3.60, p * dt / .97)
                 if e > 0.0001:
-                    bat[i]-=e
-                    status[i]="discharging"
+                    bat[i] -= e
+                    status[i] = "discharging"
 
-        # Controlled CCES discharge trajectory:
-        # 18:30 -> 80 MWh, 00:00 -> ~55 MWh,
-        # 05:30 -> ~8 MWh. This makes every simulated day
-        # return to approximately the same SOC envelope.
-        t=st.session_state.sim_time
+        # Keep the intended daily operating envelope, but never create
+        # energy: CCES follows a discharge trajectory only when it has
+        # enough stored energy. If poor weather left less energy stored,
+        # the SOC remains lower rather than magically jumping back up.
+        t = st.session_state.sim_time
+        night_start = 80.0
+        midnight_target = 55.0
+
         if t >= 18.5:
-            start_t=18.5
-            end_t=24.0
-            start_soc=80.0
-            end_soc=st.session_state.night_start_target
-            frac=(t-start_t)/(end_t-start_t)
+            frac = (t - 18.5) / 5.5
+            desired_soc = night_start + (midnight_target - night_start) * max(0.0, min(1.0, frac))
         else:
-            start_t=0.0
-            end_t=5.5
-            start_soc=st.session_state.night_start_target
-            end_soc=st.session_state.sunrise_target
-            frac=t/(end_t-start_t)
+            frac = t / 5.5
+            desired_soc = midnight_target + (8.0 - midnight_target) * max(0.0, min(1.0, frac))
 
-        desired_soc=start_soc+(end_soc-start_soc)*max(0,min(1,frac))
-
-        # Discharge only toward the trajectory, never below the reserve.
-        available_to_discharge=max(0.0,st.session_state.cces-desired_soc)
+        available_to_discharge = max(0.0, st.session_state.cces - desired_soc)
         if available_to_discharge > 0.0001:
-            e=min(available_to_discharge,max(0.0,dt*12.0))
-            st.session_state.cces-=e
-            cdis=e/max(dt,1e-9)*.85
+            e = min(available_to_discharge, 12.0 * dt)
+            st.session_state.cces -= e
+            cdis = e / max(dt, 1e-9) * .85
 
-    # At the exact 17:00 milestone, guarantee the intended full-charge
-    # visual state once the controlled solar charging window has elapsed.
-    if abs(st.session_state.sim_time-17.0) < 1e-6:
-        st.session_state.cces=80.0
+    # Physical bounds only. No end-of-day SOC correction.
+    st.session_state.bat = [max(0.0, min(4.0, x)) for x in bat]
+    st.session_state.cces = max(0.0, min(80.0, st.session_state.cces))
 
-    # Keep values physically bounded.
-    st.session_state.bat=[max(0,min(4,x)) for x in bat]
-    st.session_state.cces=max(0,min(80,st.session_state.cces))
-
-    st.session_state.hist["solar"].append(sum(solar)+ground)
+    st.session_state.hist["solar"].append(sum(solar) + ground)
     st.session_state.hist["demand"].append(sum(demand))
     st.session_state.hist["cces"].append(st.session_state.cces)
     st.session_state.hist["liion"].append(sum(st.session_state.bat))
 
     for k in st.session_state.hist:
-        st.session_state.hist[k]=st.session_state.hist[k][-96:]
+        st.session_state.hist[k] = st.session_state.hist[k][-96:]
 
     return {
-        "solar":solar,
-        "ground":ground,
-        "demand":demand,
-        "status":status,
-        "transfer":transfer,
-        "cces_charge":ccharge,
-        "cces_discharge":cdis
+        "solar": solar,
+        "ground": ground,
+        "demand": demand,
+        "status": status,
+        "transfer": transfer,
+        "cces_charge": ccharge,
+        "cces_discharge": cdis
     }
 
 if st.session_state.running:
