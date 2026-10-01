@@ -140,6 +140,20 @@ if "bat" not in st.session_state:
 if "hist" not in st.session_state:
     st.session_state.hist = {"solar":[],"demand":[],"cces":[],"liion":[]}
 
+def reset_simulation():
+    """Restore the complete simulation to its initial state."""
+    st.session_state.running = False
+    st.session_state.sim_time = 0.0
+    st.session_state.cces = 55.0
+    st.session_state.bat = [random.uniform(.70, .95) * 4 for _ in range(5)]
+    st.session_state.hist = {"solar": [], "demand": [], "cces": [], "liion": []}
+
+    # Explicitly reset the environmental sliders too.
+    st.session_state.irr_slider = 800
+    st.session_state.cloud_slider = 20
+    st.session_state.temp_slider = 30
+    st.session_state.wind_slider = 10
+
 # ============================================================
 # TOP CONTROLS — fixed compact 16:9 presentation band
 # ============================================================
@@ -202,14 +216,11 @@ with c3:
             st.session_state.running = False
             st.rerun()
     with b3:
-        if st.button("↻ Reset", use_container_width=True):
-            st.session_state.running = False
-            st.session_state.sim_time = 0.0
-            st.session_state.cces = 55.0
-            st.session_state.bat = [random.uniform(.70, .95) * 4 for _ in range(5)]
-            st.session_state.hist = {"solar": [], "demand": [], "cces": [], "liion": []}
-            st.session_state.reset_environment = True
-            st.rerun()
+        st.button(
+            "↻ Reset",
+            use_container_width=True,
+            on_click=reset_simulation
+        )
 
     st.markdown(f'<div class="control-state">AUTO · <b>{"RUNNING" if st.session_state.running else "PAUSED"}</b></div>', unsafe_allow_html=True)
 
