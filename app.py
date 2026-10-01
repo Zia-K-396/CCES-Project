@@ -610,7 +610,7 @@ html=f"""
     <div class="flowrow">
       <div>
         <div class="flowbox"><div style="font-size:28px">☀️</div><b>Rooftop Solar</b><br><span class="sub">28 MW capacity</span></div>
-        <div class="flowarrow green">→ {sum(solar):.1f} MW</div>
+        <div class="flowarrow green">→ {sum(solar)+ground:.1f} MW</div>
         <div class="flowbox"><div style="font-size:28px">☀️</div><b>Solar Farm</b><br><span class="sub">12 MW capacity</span></div>
       </div>
       <div class="flowbox cces">
