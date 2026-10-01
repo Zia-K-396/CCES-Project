@@ -267,8 +267,10 @@ def run_step():
     #
     # Day:
     #   Solar -> local demand
+    #   shortage -> local Li-ion
     #   surplus -> local Li-ion
-    #   once Li-ion is full -> CCES
+    #   once Li-ion is full -> CCES charging
+    #   CCES is NEVER discharged during daytime
     #
     # Night:
     #   CCES supplies the main shortage
@@ -311,13 +313,26 @@ def run_step():
             st.session_state.cces+=e
             ccharge=e/max(dt*.85,1e-9)
 
-        # Remaining daytime shortage is supplied by CCES.
-        remaining=sum(deficit)
-        if remaining > 0.01:
-            p=min(remaining,8)
-            e=min(p*dt/.85,max(0,st.session_state.cces-0.5))
-            cdis=e/max(dt,1e-9)*.85
-            st.session_state.cces-=e
+        # DAYTIME SHORTAGE:
+        # CCES is NEVER discharged during the day.
+        # If local solar is insufficient, the neighbourhood Li-ion battery
+        # handles the shortage. This keeps the daytime story:
+        #
+        #   Solar -> Consumers
+        #   Solar surplus -> Li-ion
+        #   Solar shortage -> Li-ion
+        #   CCES -> CHARGING ONLY (never supplying load)
+        #
+        # The Li-ion discharge is deliberately limited so the demo shows
+        # battery support without rapidly emptying the batteries.
+        for i in range(5):
+            if deficit[i] > 0.01 and bat[i] > 0.60:
+                p = min(deficit[i], 0.75)
+                e = min(max(0, bat[i] - 0.60), p * dt / .95)
+
+                if e > 0.0001:
+                    bat[i] -= e
+                    status[i] = "discharging"
 
     else:
         # NIGHT:
