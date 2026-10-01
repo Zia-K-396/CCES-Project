@@ -302,36 +302,36 @@ def run_step():
 
         # ----------------------------------------------------
         # SOLAR SURPLUS -> LI-ION FIRST
-        # Batteries are actively filled during the day.
-        # They should be essentially full by sunset.
+        # Use the TOTAL available solar surplus (rooftop + ground)
+        # to fill neighbourhood batteries. This represents the
+        # central/local DC bus sharing surplus solar between NBs.
+        # No CCES charging is allowed until the Li-ion fleet is
+        # essentially full.
         # ----------------------------------------------------
+        available_surplus=sum(surplus)+ground
+
         for i in range(5):
-            if surplus[i] > 0.01 and bat[i] < 4.0:
+            if available_surplus > 0.01 and bat[i] < 4.0:
                 room=max(0,4.0-bat[i])
-                # Allow enough charging power to reach full.
-                p=min(surplus[i],2.0)
+                # Higher charging power is allowed because this is
+                # the short-duration Li-ion buffer stage.
+                p=min(available_surplus,2.5)
                 e=min(room,p*dt*.95)
 
                 if e > 0.0001:
                     bat[i]+=e
-                    surplus[i]-=e/max(dt*.95,1e-9)
+                    available_surplus-=e/max(dt*.95,1e-9)
                     status[i]="charging"
 
         # ----------------------------------------------------
-        # ONLY AFTER LI-ION IS FULL:
+        # ONLY AFTER LI-ION IS ALMOST FULL:
         # remaining solar surplus -> CCES
-        #
-        # To make the default demonstration reliably reach 100%,
-        # all remaining usable surplus is accumulated into CCES.
-        # CCES is never used for daytime load.
+        # CCES is NEVER discharged during daytime.
         # ----------------------------------------------------
-        remaining_surplus=sum(surplus)+ground
+        remaining_surplus=max(0.0,available_surplus)
 
-        if remaining_surplus > 0.01 and all(x >= 3.99 for x in bat):
+        if remaining_surplus > 0.01 and all(x >= 3.90 for x in bat):
             room=max(0,80.0-st.session_state.cces)
-
-            # Use the remaining daytime solar to charge CCES.
-            # 85% round-trip charging-side factor represented here.
             e=min(room,remaining_surplus*dt*.85)
 
             if e > 0.0001:
