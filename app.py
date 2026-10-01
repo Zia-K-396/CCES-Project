@@ -180,6 +180,7 @@ with c1:
         temp = st.slider("🌡 Temperature", 0, 50, 30, 1, key="temp_slider")
     with e4:
         wind = st.slider("≋ Wind", 0, 50, 10, 1, key="wind_slider")
+    st.markdown("<div style="font-size:10px; color:#6b7280; margin-top:2px;">Note: Slider changes affect solar generation throughout the day in this simulation. Real-world performance can be further improved with forecasting and optimized control.</div>", unsafe_allow_html=True)
 
 with c2:
     t = st.session_state.sim_time
