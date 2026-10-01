@@ -45,6 +45,39 @@ div[data-testid="stProgress"]{height:7px !important;}
 .current-time{text-align:center;font-size:21px;font-weight:900;line-height:22px;margin-top:0;color:#fff;}
 .time-state{margin:1px auto 0;width:62%;text-align:center;padding:3px 5px;border-radius:6px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:7px;font-weight:800;letter-spacing:.1px;}
 .control-state{text-align:center;color:#64748b;font-size:8px;margin-top:2px;}
+.summary-time{
+    margin-top:12px;
+    padding:10px 8px 9px;
+    border-radius:9px;
+    border:1px solid #7697bc;
+    background:linear-gradient(135deg,#173b69 0%,#285f91 55%,#16365d 100%);
+    text-align:center;
+    color:#fff;
+}
+.summary-time-label{
+    font-size:8px;
+    font-weight:800;
+    letter-spacing:.8px;
+    color:rgba(255,255,255,.82);
+}
+.summary-time-value{
+    font-size:24px;
+    line-height:27px;
+    font-weight:900;
+    margin-top:1px;
+    color:#fff;
+}
+.summary-time-state{
+    display:inline-block;
+    margin-top:3px;
+    padding:3px 8px;
+    border-radius:5px;
+    background:rgba(255,255,255,.17);
+    border:1px solid rgba(255,255,255,.28);
+    font-size:7px;
+    font-weight:800;
+}
+
 
 /* Main dashboard */
 .dashboard{font-family:Arial,Helvetica,sans-serif;color:#10243e;background:#f4f7fb;}
@@ -584,6 +617,14 @@ html=f"""
     <div class="bar"><i style="width:{st.session_state.cces/80*100:.1f}%"></i></div>
     <div class="kv"><span>Total Li-ion Charge</span><b>{total_bat:.1f}/20 MWh</b></div>
     <div class="bar bluebar"><i style="width:{total_bat/20*100:.1f}%"></i></div>
+
+    <div class="summary-time">
+      <div class="summary-time-label">SIMULATION TIME</div>
+      <div class="summary-time-value">{dh}:{mm:02d} {ap}</div>
+      <div class="summary-time-state">
+        {"☀ DAY · SOLAR ACTIVE" if day else "☾ NIGHT · CCES SUPPLY"}
+      </div>
+    </div>
   </div>
 </div>
 
