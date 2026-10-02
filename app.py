@@ -160,508 +160,514 @@ def reset_simulation():
     st.session_state.temp_slider = 30
     st.session_state.wind_slider = 10
 
-# ============================================================
-# TOP CONTROLS — fixed compact 16:9 presentation band
-# ============================================================
-c1, c2, c3 = st.columns([4.25, 3.15, 2.60], gap="small")
+@st.fragment
+def simulation_ui():
+    # ============================================================
+    # TOP CONTROLS — fixed compact 16:9 presentation band
+    # ============================================================
+    c1, c2, c3 = st.columns([4.25, 3.15, 2.60], gap="small")
 
-with c1:
-    st.markdown("""
-    <div class="top-panel env-panel">
-      <div class="top-title">Environmental Conditions <span>(Affecting Solar Generation)</span></div>
-    </div>
-    """, unsafe_allow_html=True)
-    e1, e2, e3, e4 = st.columns(4, gap="small")
-    with e1:
-        irr = st.slider("☀ Irradiance", 0, 1000, 800, 10, key="irr_slider")
-    with e2:
-        cloud = st.slider("☁ Cloud", 0, 100, 20, 1, key="cloud_slider")
-    with e3:
-        temp = st.slider("🌡 Temperature", 0, 50, 30, 1, key="temp_slider")
-    with e4:
-        wind = st.slider("≋ Wind", 0, 50, 10, 1, key="wind_slider")
-    st.markdown('<div style="font-size:10px; color:#6b7280; margin-top:2px;">Note: Slider changes affect solar generation throughout the day in this simulation. Real-world performance can be further improved with forecasting and optimized control.</div>', unsafe_allow_html=True)
-
-with c2:
-    t = st.session_state.sim_time
-    hh = int(t)
-    mm = int((t-hh)*60)
-    ap = "AM" if hh < 12 else "PM"
-    dh = hh % 12 or 12
-    day = 5.5 <= t <= 18.5
-
-    st.markdown(f"""
-    <div class="time-panel">
-      <div class="time-title">Time of Day</div>
-      <div class="time-track">
-        <div class="time-sun">☀</div>
-        <div class="time-marker" style="left:{(t/24)*100:.2f}%"></div>
-      </div>
-      <div class="time-labels"><span>☾ 12 AM</span><span>☀ 12 PM</span><span>☾ 12 AM</span></div>
-      <div class="current-time">{dh}:{mm:02d} {ap}</div>
-      <div class="time-state">{"DAY · SOLAR ACTIVE" if day else "NIGHT · CCES SUPPLY"}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c3:
-    st.markdown("""
-    <div class="top-panel control-panel">
-      <div class="top-title">Simulation Control</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.session_state.auto = True
-    st.session_state.speed = st.slider("Simulation Speed", .5, 5.0, st.session_state.speed, .5)
-
-    b1, b2, b3 = st.columns(3, gap="small")
-    with b1:
-        if st.button("▶ Start", use_container_width=True):
-            st.session_state.running = True
-            st.rerun()
-    with b2:
-        if st.button("Ⅱ Pause", use_container_width=True):
-            st.session_state.running = False
-            st.rerun()
-    with b3:
-        st.button(
-            "↻ Reset",
-            use_container_width=True,
-            on_click=reset_simulation
-        )
-
-    st.markdown(f'<div class="control-state">AUTO · <b>{"RUNNING" if st.session_state.running else "PAUSED"}</b></div>', unsafe_allow_html=True)
-
-# ============================================================
-# SIMULATION
-# ============================================================
-def daylight(t):
-    return math.sin(math.pi*(t-5.5)/13) if 5.5 <= t <= 18.5 else 0
-
-def solar_factor():
-    d=max(0,daylight(st.session_state.sim_time))
-    cloud_factor=max(0,1-.65*cloud/100)
-    temp_factor=max(.82,1-max(0,temp-25)*.004)
-    return d*(irr/1000)*cloud_factor*temp_factor
-
-def get_values():
-    f=solar_factor()
-    rooftop_total=34*f
-    solar=[rooftop_total*x for x in [.185,.171,.218,.179,.197]]
-    ground=16*f
-    base=[4.6,4.0,4.4,4.3,4.1]
-    t=st.session_state.sim_time
-    k=.72 if t<6 else .82 if t<10 else .68 if t<16 else .90 if t<19 else 1.10
-    mult=[1,.94,1.06,.98,1.03]
-    demand=[base[i]*k*mult[i] for i in range(5)]
-    return solar,ground,demand
-
-def run_step():
-    # Advance the simulation clock. Energy changes are calculated from the
-    # actual solar surplus/deficit at this timestep -- no artificial SOC jumps.
-    old_time = st.session_state.sim_time
-    time_step = .15 * st.session_state.speed
-    new_time = old_time + time_step
-    if new_time >= 24:
-        st.session_state.sim_day += 1
-        new_time %= 24
-
-    st.session_state.sim_time = new_time
-
-    solar, ground, demand = get_values()
-    dt = time_step
-    bat = st.session_state.bat[:]
-    status = ["idle"] * 5
-    transfer = [0.0] * 5
-    ccharge = 0.0
-    cdis = 0.0
-
-    is_day = 5.5 <= st.session_state.sim_time <= 18.5
-
-    if is_day:
-        # Solar directly serves each neighbourhood first.
-        surplus = [max(0.0, solar[i] - demand[i]) for i in range(5)]
-        deficit = [max(0.0, demand[i] - solar[i]) for i in range(5)]
-
-        # Only small daytime fluctuations are handled by Li-ion.
-        for i in range(5):
-            if deficit[i] > 0.01 and bat[i] > 3.65:
-                p = min(deficit[i], 0.12)
-                e = min(bat[i] - 3.65, p * dt / .97)
-                if e > 0.0001:
-                    bat[i] -= e
-                    status[i] = "discharging"
-
-        # Solar surplus charges Li-ion first.
-        available_surplus = sum(surplus) + ground
-        for i in range(5):
-            if available_surplus > 0.01 and bat[i] < 4.0:
-                room = 4.0 - bat[i]
-                p = min(available_surplus, 2.5)
-                e = min(room, p * dt * .95)
-                if e > 0.0001:
-                    bat[i] += e
-                    available_surplus -= e / max(dt * .95, 1e-9)
-                    status[i] = "charging"
-
-        # ----------------------------------------------------
-        # CCES: ONLY REAL SOLAR SURPLUS CHARGES IT.
-        #
-        # There is deliberately NO target-SOC interpolation and NO
-        # "fill to 80 MWh at 5 PM" command. Under default conditions,
-        # the modeled solar resource is sized so the real surplus
-        # gradually raises CCES to ~80 MWh by around 5 PM.
-        #
-        # Changing irradiance/cloud cover therefore directly changes
-        # the CCES charging rate and final SOC.
-        # ----------------------------------------------------
-        if available_surplus > 0.01 and st.session_state.cces < 80.0:
-            charge_power = min(available_surplus, 14.0)  # MW compressor limit
-            e = min(80.0 - st.session_state.cces, charge_power * dt * .90)
-            if e > 0.0001:
-                st.session_state.cces += e
-                ccharge = e / max(dt * .90, 1e-9)
-
-    else:
-        # Night: CCES is the primary source.
-        # NB1/NB3 provide only small local fluctuations.
-        shortage_event = [0.18, 0.0, 0.15, 0.0, 0.0]
-
-        for i in range(5):
-            if shortage_event[i] > 0 and bat[i] > 3.60:
-                p = min(shortage_event[i], 0.20)
-                e = min(bat[i] - 3.60, p * dt / .97)
-                if e > 0.0001:
-                    bat[i] -= e
-                    status[i] = "discharging"
-
-        # NIGHT-TIME ENERGY DISPATCH
-        # The default case retains the original demonstration trajectory:
-        #   18:30 -> 80 MWh
-        #   00:00 -> ~55 MWh
-        #   05:30 -> ~8 MWh (~10%)
-        #
-        # When environmental sliders are changed, the LOAD/USAGE RATE remains
-        # the same. We therefore use the same CCES power demand as the default
-        # trajectory, but do NOT reduce that demand to preserve CCES SOC.
-        # If CCES reaches 5%, Li-ion supplies the uncovered energy.
-
-        t = st.session_state.sim_time
-        cces_min = 4.0  # 5% hard minimum
-
-        # Exact default trajectory is retained for the default slider state.
-        # These values represent the intended normal-night CCES usage.
-        if t >= 18.5:
-            default_cces_power = 25.0 / 5.5
-        else:
-            default_cces_power = 47.0 / 5.5
-
-        requested_e = default_cces_power * dt
-        available_e = max(0.0, st.session_state.cces - cces_min)
-
-        # Normal operation: CCES supplies the same energy requested by the
-        # load regardless of weather conditions.
-        e = min(requested_e, available_e)
-
-        if e > 0.0001:
-            st.session_state.cces -= e
-            cdis = e / max(dt, 1e-9) * .85
-
-        # If CCES has reached the 5% reserve, Li-ion supplies the SAME
-        # remaining energy requirement. We do not alter the usage rate.
-        remaining_energy = max(0.0, requested_e - e)
-
-        if remaining_energy > 0.0001:
-            total_available_bat = sum(max(0.0, b - 0.25) for b in bat)
-
-            if total_available_bat > 0.0001:
-                for i in range(5):
-                    if total_available_bat <= 0.0001:
-                        break
-
-                    usable = max(0.0, bat[i] - 0.25)
-                    if usable <= 0:
-                        continue
-
-                    share = remaining_energy * (usable / total_available_bat)
-                    share = min(share, usable)
-
-                    if share > 0.0001:
-                        bat[i] -= share
-                        status[i] = "discharging"
-                        total_available_bat -= share
-
-    # Physical bounds only. No end-of-day SOC correction.
-    st.session_state.bat = [max(0.0, min(4.0, x)) for x in bat]
-    st.session_state.cces = max(0.0, min(80.0, st.session_state.cces))
-
-    st.session_state.hist["solar"].append(sum(solar) + ground)
-    st.session_state.hist["demand"].append(sum(demand))
-    st.session_state.hist["cces"].append(st.session_state.cces)
-    st.session_state.hist["liion"].append(sum(st.session_state.bat))
-
-    for k in st.session_state.hist:
-        st.session_state.hist[k] = st.session_state.hist[k][-96:]
-
-    return {
-        "solar": solar,
-        "ground": ground,
-        "demand": demand,
-        "status": status,
-        "transfer": transfer,
-        "cces_charge": ccharge,
-        "cces_discharge": cdis
-    }
-
-if st.session_state.running:
-    data=run_step()
-else:
-    solar,ground,demand=get_values()
-    data={"solar":solar,"ground":ground,"demand":demand,
-          "status":["idle"]*5,"transfer":[0]*5,
-          "cces_charge":0,"cces_discharge":0}
-
-# ============================================================
-# HTML DASHBOARD
-# This is deliberately built to mirror the supplied reference:
-# left solar panels | central flow | right summary
-# then 5 neighbourhood cards | four 24-hour charts.
-# ============================================================
-def esc(x):
-    return str(x).replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-
-solar=data["solar"]; ground=data["ground"]; demand=data["demand"]
-total_solar=sum(solar)+ground; total_demand=sum(demand)
-total_bat=sum(st.session_state.bat)
-
-def battery_badge(i):
-    s=data["status"][i]
-    if s=="charging": return '<span class="badge charge">⚡ CHARGING</span>'
-    if s=="discharging": return '<span class="badge discharge">⚡ DISCHARGING</span>'
-    return '<span class="badge idle">IDLE</span>'
-
-def svg_arrow(color, direction="down"):
-    return "↓" if direction=="down" else "↑"
-
-# Build neighbourhood HTML.
-nb_html=""
-for i in range(5):
-    stt=data["status"][i]
-    frac=st.session_state.bat[i]/4
-    if data["status"][i]=="discharging":
-        middle=f'<div class="flowarrow blue">↑</div><div class="flowlabel blue">Li-ion → Consumers</div>'
-    elif demand[i] > solar[i]:
-        middle=f'<div class="flowarrow blue">↑</div><div class="flowlabel blue">CCES → Consumers</div>'
-    else:
-        middle=f'<div class="flowarrow orange">↑</div><div class="flowlabel orange">Excess → CCES</div>'
-    if stt=="charging":
-        batt=f'<div class="mini-flow"><span class="flowarrow green">↑</span><span>Solar → Li-ion</span></div>'
-    elif stt=="discharging":
-        batt=f'<div class="mini-flow"><span class="flowarrow blue">↓</span><span>Li-ion → Consumers</span></div>'
-    else:
-        batt=f'<div class="mini-flow"><span class="flowarrow gray">•</span><span>Li-ion idle</span></div>'
-
-    support=""
-    if data["transfer"][i]>.01:
-        support='<div class="support">← OTHER NB Li-ion SUPPORT</div>'
-    elif data["transfer"][i]<-.01:
-        support='<div class="support">OTHER NB Li-ion →</div>'
-
-    nb_html+=f"""
-    <div class="nbcard">
-      <div class="nbhead nb{i}">
-        <span class="house">⌂</span>
-        <span><b>Neighbourhood {i+1}</b><br><small>4,000 consumers</small></span>
-      </div>
-      <div class="nbbody">
-        <div class="row"><span>☀️ Rooftop Solar Generation</span><b>{solar[i]:.1f} MW</b></div>
-        <div class="row"><span>▥ Current Demand</span><b>{demand[i]:.1f} MW</b></div>
-        <div class="row"><span>🔋 Li-ion Battery</span><b>{st.session_state.bat[i]:.1f} / 4 MWh ({frac*100:.0f}%)</b></div>
-        <div class="bar"><i style="width:{frac*100:.1f}%"></i></div>
-        {battery_badge(i)}
-        <div class="pf">Power Flow (Current)</div>
-        <div class="flowgrid">
-          <div><div class="flowarrow green">↓</div><b>{solar[i]:.1f} MW</b><small>from Solar</small></div>
-          <div><div class="flowarrow {'blue' if demand[i]>solar[i] else 'orange'}">
-             {'↑' if demand[i]>solar[i] else '↓'}</div>
-             <b>{abs(demand[i]-solar[i]):.1f} MW</b>
-             <small>{'from CCES' if demand[i]>solar[i] else 'to CCES'}</small></div>
-          <div><div class="flowarrow {'blue' if stt=='discharging' else 'green'}">
-             {'↓' if stt=='discharging' else '↑' if stt=='charging' else '•'}</div>
-             <b>{'ACTIVE' if stt!='idle' else '—'}</b>
-             <small>{'Li-ion' if stt!='idle' else 'idle'}</small></div>
+    with c1:
+        st.markdown("""
+        <div class="top-panel env-panel">
+          <div class="top-title">Environmental Conditions <span>(Affecting Solar Generation)</span></div>
         </div>
-        {support}
-      </div>
-    </div>
-    """
+        """, unsafe_allow_html=True)
+        e1, e2, e3, e4 = st.columns(4, gap="small")
+        with e1:
+            irr = st.slider("☀ Irradiance", 0, 1000, 800, 10, key="irr_slider")
+        with e2:
+            cloud = st.slider("☁ Cloud", 0, 100, 20, 1, key="cloud_slider")
+        with e3:
+            temp = st.slider("🌡 Temperature", 0, 50, 30, 1, key="temp_slider")
+        with e4:
+            wind = st.slider("≋ Wind", 0, 50, 10, 1, key="wind_slider")
+        st.markdown('<div style="font-size:10px; color:#6b7280; margin-top:2px;">Note: Slider changes affect solar generation throughout the day in this simulation. Real-world performance can be further improved with forecasting and optimized control.</div>', unsafe_allow_html=True)
 
-# Simple SVG line chart builder.
-def chart_svg(title, values, color, ymax, unit):
-    if not values:
-        values=[0,0]
-    vals=values[-96:]
-    w,h=360,120
-    left,top=30,20
-    pw,ph=320,78
-    pts=[]
-    for j,v in enumerate(vals):
-        x=left+(j/max(1,len(vals)-1))*pw
-        y=top+ph-(max(0,min(ymax,v))/ymax)*ph
-        pts.append(f"{x:.1f},{y:.1f}")
-    poly=" ".join(pts)
-    return f"""
-    <div class="chartbox">
-      <div class="charttitle">{title}</div>
-      <svg viewBox="0 0 {w} {h}" width="100%" height="120">
-        <line x1="{left}" y1="{top+ph}" x2="{left+pw}" y2="{top+ph}" stroke="#dbe4ee"/>
-        <line x1="{left}" y1="{top}" x2="{left}" y2="{top+ph}" stroke="#dbe4ee"/>
-        <polyline points="{poly}" fill="none" stroke="{color}" stroke-width="3"/>
-        <text x="{left}" y="116" font-size="9" fill="#64748b">12 AM</text>
-        <text x="{left+pw/2}" y="116" font-size="9" fill="#64748b" text-anchor="middle">12 PM</text>
-        <text x="{left+pw}" y="116" font-size="9" fill="#64748b" text-anchor="end">12 AM</text>
-      </svg>
-    </div>
-    """
+    with c2:
+        t = st.session_state.sim_time
+        hh = int(t)
+        mm = int((t-hh)*60)
+        ap = "AM" if hh < 12 else "PM"
+        dh = hh % 12 or 12
+        day = 5.5 <= t <= 18.5
 
-hist=st.session_state.hist
-if not hist["solar"]:
-    # Reference curves until simulation has produced history.
-    hours=[i/4 for i in range(97)]
-    hist_s=[30*max(0,math.sin(math.pi*(h-5.5)/13)) if 5.5<=h<=18.5 else 0 for h in hours]
-    hist_d=[8+7*max(0,math.sin(math.pi*(h-7)/14))+4*(1 if h>=18 else 0) for h in hours]
-    hist_c=[60-32*max(0,math.sin(math.pi*(h-6)/12)) if 6<=h<=18 else 60 for h in hours]
-    hist_l=[8+6*max(0,math.sin(math.pi*(h-6)/12)) if 6<=h<=18 else 8 for h in hours]
-else:
-    hist_s=hist["solar"];hist_d=hist["demand"];hist_c=hist["cces"];hist_l=hist["liion"]
+        st.markdown(f"""
+        <div class="time-panel">
+          <div class="time-title">Time of Day</div>
+          <div class="time-track">
+            <div class="time-sun">☀</div>
+            <div class="time-marker" style="left:{(t/24)*100:.2f}%"></div>
+          </div>
+          <div class="time-labels"><span>☾ 12 AM</span><span>☀ 12 PM</span><span>☾ 12 AM</span></div>
+          <div class="current-time">{dh}:{mm:02d} {ap}</div>
+          <div class="time-state">{"DAY · SOLAR ACTIVE" if day else "NIGHT · CCES SUPPLY"}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-html=f"""
-<style>
-.dashboard{{font-family:Arial,Helvetica,sans-serif;color:#10243e;background:#f4f7fb}}
-.panel{{background:#fff;border:1px solid #b9c7d8;border-radius:11px;padding:9px 11px;box-sizing:border-box}}
-.gridtop{{display:grid;grid-template-columns:1.7fr 2.0fr 1.25fr;gap:8px}}
-.main{{display:grid;grid-template-columns:1.0fr 3.35fr 1.18fr;gap:7px;margin-top:6px}}
-.nbs{{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:6px}}
-.charts{{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}}
-.title{{font-size:18px;font-weight:800;margin-bottom:10px}}
-.sub{{font-size:11px;color:#64748b}}
-.kv{{display:flex;justify-content:space-between;font-size:11px;margin:9px 0}}
-.bar{{height:10px;background:#e6edf5;border-radius:6px;overflow:hidden;margin:5px 0 8px}}
-.bar i{{display:block;height:100%;background:#16a34a;border-radius:6px}}
-.orangebar i{{background:#f59e0b}}
-.bluebar i{{background:#1677e8}}
-.solarbox,.flowbox{{border:1px solid #b9c7d8;border-radius:10px;padding:12px;text-align:center;background:#fff}}
-.flowbox{{min-height:82px}}
-.cces{{min-height:190px}}
-.big{{font-size:17px;font-weight:800}}
-.legend{{font-size:9px;font-weight:800;margin-left:10px}}
-.green{{color:#16a34a}} .blue{{color:#1677e8}} .orange{{color:#f59e0b}} .red{{color:#ef233c}} .gray{{color:#94a3b8}}
-.flowrow{{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center}}
-.bus{{height:5px;background:#334155;border-radius:4px;margin:9px 0}}
-.nbcard{{background:#fff;border:1px solid #b9c7d8;border-radius:11px;overflow:hidden}}
-.nbhead{{padding:9px 10px;display:flex;align-items:center;gap:8px;font-size:13px}}
-.nb0{{background:#ffd7d7}} .nb1{{background:#d8e9ff}} .nb2{{background:#dcfce7}} .nb3{{background:#fff0c2}} .nb4{{background:#eadcff}}
-.house{{font-size:24px;font-weight:900}}
-.nbhead small{{font-size:9px;color:#334155}}
-.nbbody{{padding:9px 10px}}
-.row{{display:flex;justify-content:space-between;gap:5px;font-size:9px;margin:8px 0}}
-.row b{{font-size:9px}}
-.badge{{display:block;border-radius:7px;text-align:center;padding:5px;font-size:9px;font-weight:800;margin:7px 0}}
-.charge{{background:#dcfce7;color:#16a34a}} .discharge{{background:#dbeafe;color:#1677e8}} .idle{{background:#eef2f7;color:#64748b}}
-.pf{{font-size:9px;font-weight:800;color:#64748b;margin-top:9px}}
-.flowgrid{{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;text-align:center;margin-top:3px}}
-.flowarrow{{font-size:25px;line-height:24px;font-weight:900}}
-.flowgrid b{{display:block;font-size:8px}}
-.flowgrid small{{display:block;font-size:7px;color:#64748b}}
-.support{{background:#fff7ed;color:#c2410c;border-radius:6px;text-align:center;padding:4px;font-size:7px;font-weight:800;margin-top:7px}}
-.chartbox{{background:#fff;border:1px solid #b9c7d8;border-radius:10px;padding:6px}}
-.charttitle{{font-size:10px;font-weight:800;margin-left:5px}}
-@media(max-width:1100px){{
- .gridtop,.main{{grid-template-columns:1fr}}
- .nbs,.charts{{grid-template-columns:repeat(2,1fr)}}
-}}
-</style>
+    with c3:
+        st.markdown("""
+        <div class="top-panel control-panel">
+          <div class="top-title">Simulation Control</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-<div class="dashboard">
+        st.session_state.auto = True
+        st.session_state.speed = st.slider("Simulation Speed", .5, 5.0, st.session_state.speed, .5)
 
-<div class="main">
-  <div>
-    <div class="panel">
-      <div class="title">Total Solar Generation</div>
-      <div class="kv"><span>Total Rooftop Capacity</span><b>28 MW</b></div>
-      <div class="kv"><span>Total Solar Generation</span><b>{total_solar:.1f} MW</b></div>
-      <div class="bar orangebar"><i style="width:{min(100,total_solar/40*100):.1f}%"></i></div>
-      <div style="text-align:right;font-size:9px;color:#64748b">{total_solar/40*100:.0f}% of 40 MW total capacity</div>
-    </div>
-    <div class="panel" style="margin-top:8px">
-      <div class="title">Solar Farm (CCES Ground)</div>
-      <div class="kv"><span>Total Capacity</span><b>12 MW</b></div>
-      <div class="kv"><span>Current Generation</span><b>{ground:.1f} MW</b></div>
-      <div class="bar"><i style="width:{ground/12*100:.1f}%"></i></div>
-      <div style="text-align:right;font-size:9px;color:#64748b">{ground/12*100:.0f}%</div>
-    </div>
-  </div>
+        b1, b2, b3 = st.columns(3, gap="small")
+        with b1:
+            if st.button("▶ Start", use_container_width=True):
+                st.session_state.running = True
+                st.rerun()
+        with b2:
+            if st.button("Ⅱ Pause", use_container_width=True):
+                st.session_state.running = False
+                st.rerun()
+        with b3:
+            st.button(
+                "↻ Reset",
+                use_container_width=True,
+                on_click=reset_simulation
+            )
 
-  <div class="panel">
-    <div class="title">Power Flow Diagram (Real-time)
-      <span class="legend green">━━► Solar</span>
-      <span class="legend blue">━━► CCES → NB</span>
-      <span class="legend orange">━━► Li-ion</span>
-    </div>
+        st.markdown(f'<div class="control-state">AUTO · <b>{"RUNNING" if st.session_state.running else "PAUSED"}</b></div>', unsafe_allow_html=True)
 
-    <div class="flowrow">
+    # ============================================================
+    # SIMULATION
+    # ============================================================
+    def daylight(t):
+        return math.sin(math.pi*(t-5.5)/13) if 5.5 <= t <= 18.5 else 0
+
+    def solar_factor():
+        d=max(0,daylight(st.session_state.sim_time))
+        cloud_factor=max(0,1-.65*cloud/100)
+        temp_factor=max(.82,1-max(0,temp-25)*.004)
+        return d*(irr/1000)*cloud_factor*temp_factor
+
+    def get_values():
+        f=solar_factor()
+        rooftop_total=34*f
+        solar=[rooftop_total*x for x in [.185,.171,.218,.179,.197]]
+        ground=16*f
+        base=[4.6,4.0,4.4,4.3,4.1]
+        t=st.session_state.sim_time
+        k=.72 if t<6 else .82 if t<10 else .68 if t<16 else .90 if t<19 else 1.10
+        mult=[1,.94,1.06,.98,1.03]
+        demand=[base[i]*k*mult[i] for i in range(5)]
+        return solar,ground,demand
+
+    def run_step():
+        # Advance the simulation clock. Energy changes are calculated from the
+        # actual solar surplus/deficit at this timestep -- no artificial SOC jumps.
+        old_time = st.session_state.sim_time
+        time_step = .15 * st.session_state.speed
+        new_time = old_time + time_step
+        if new_time >= 24:
+            st.session_state.sim_day += 1
+            new_time %= 24
+
+        st.session_state.sim_time = new_time
+
+        solar, ground, demand = get_values()
+        dt = time_step
+        bat = st.session_state.bat[:]
+        status = ["idle"] * 5
+        transfer = [0.0] * 5
+        ccharge = 0.0
+        cdis = 0.0
+
+        is_day = 5.5 <= st.session_state.sim_time <= 18.5
+
+        if is_day:
+            # Solar directly serves each neighbourhood first.
+            surplus = [max(0.0, solar[i] - demand[i]) for i in range(5)]
+            deficit = [max(0.0, demand[i] - solar[i]) for i in range(5)]
+
+            # Only small daytime fluctuations are handled by Li-ion.
+            for i in range(5):
+                if deficit[i] > 0.01 and bat[i] > 3.65:
+                    p = min(deficit[i], 0.12)
+                    e = min(bat[i] - 3.65, p * dt / .97)
+                    if e > 0.0001:
+                        bat[i] -= e
+                        status[i] = "discharging"
+
+            # Solar surplus charges Li-ion first.
+            available_surplus = sum(surplus) + ground
+            for i in range(5):
+                if available_surplus > 0.01 and bat[i] < 4.0:
+                    room = 4.0 - bat[i]
+                    p = min(available_surplus, 2.5)
+                    e = min(room, p * dt * .95)
+                    if e > 0.0001:
+                        bat[i] += e
+                        available_surplus -= e / max(dt * .95, 1e-9)
+                        status[i] = "charging"
+
+            # ----------------------------------------------------
+            # CCES: ONLY REAL SOLAR SURPLUS CHARGES IT.
+            #
+            # There is deliberately NO target-SOC interpolation and NO
+            # "fill to 80 MWh at 5 PM" command. Under default conditions,
+            # the modeled solar resource is sized so the real surplus
+            # gradually raises CCES to ~80 MWh by around 5 PM.
+            #
+            # Changing irradiance/cloud cover therefore directly changes
+            # the CCES charging rate and final SOC.
+            # ----------------------------------------------------
+            if available_surplus > 0.01 and st.session_state.cces < 80.0:
+                charge_power = min(available_surplus, 14.0)  # MW compressor limit
+                e = min(80.0 - st.session_state.cces, charge_power * dt * .90)
+                if e > 0.0001:
+                    st.session_state.cces += e
+                    ccharge = e / max(dt * .90, 1e-9)
+
+        else:
+            # Night: CCES is the primary source.
+            # NB1/NB3 provide only small local fluctuations.
+            shortage_event = [0.18, 0.0, 0.15, 0.0, 0.0]
+
+            for i in range(5):
+                if shortage_event[i] > 0 and bat[i] > 3.60:
+                    p = min(shortage_event[i], 0.20)
+                    e = min(bat[i] - 3.60, p * dt / .97)
+                    if e > 0.0001:
+                        bat[i] -= e
+                        status[i] = "discharging"
+
+            # NIGHT-TIME ENERGY DISPATCH
+            # The default case retains the original demonstration trajectory:
+            #   18:30 -> 80 MWh
+            #   00:00 -> ~55 MWh
+            #   05:30 -> ~8 MWh (~10%)
+            #
+            # When environmental sliders are changed, the LOAD/USAGE RATE remains
+            # the same. We therefore use the same CCES power demand as the default
+            # trajectory, but do NOT reduce that demand to preserve CCES SOC.
+            # If CCES reaches 5%, Li-ion supplies the uncovered energy.
+
+            t = st.session_state.sim_time
+            cces_min = 4.0  # 5% hard minimum
+
+            # Exact default trajectory is retained for the default slider state.
+            # These values represent the intended normal-night CCES usage.
+            if t >= 18.5:
+                default_cces_power = 25.0 / 5.5
+            else:
+                default_cces_power = 47.0 / 5.5
+
+            requested_e = default_cces_power * dt
+            available_e = max(0.0, st.session_state.cces - cces_min)
+
+            # Normal operation: CCES supplies the same energy requested by the
+            # load regardless of weather conditions.
+            e = min(requested_e, available_e)
+
+            if e > 0.0001:
+                st.session_state.cces -= e
+                cdis = e / max(dt, 1e-9) * .85
+
+            # If CCES has reached the 5% reserve, Li-ion supplies the SAME
+            # remaining energy requirement. We do not alter the usage rate.
+            remaining_energy = max(0.0, requested_e - e)
+
+            if remaining_energy > 0.0001:
+                total_available_bat = sum(max(0.0, b - 0.25) for b in bat)
+
+                if total_available_bat > 0.0001:
+                    for i in range(5):
+                        if total_available_bat <= 0.0001:
+                            break
+
+                        usable = max(0.0, bat[i] - 0.25)
+                        if usable <= 0:
+                            continue
+
+                        share = remaining_energy * (usable / total_available_bat)
+                        share = min(share, usable)
+
+                        if share > 0.0001:
+                            bat[i] -= share
+                            status[i] = "discharging"
+                            total_available_bat -= share
+
+        # Physical bounds only. No end-of-day SOC correction.
+        st.session_state.bat = [max(0.0, min(4.0, x)) for x in bat]
+        st.session_state.cces = max(0.0, min(80.0, st.session_state.cces))
+
+        st.session_state.hist["solar"].append(sum(solar) + ground)
+        st.session_state.hist["demand"].append(sum(demand))
+        st.session_state.hist["cces"].append(st.session_state.cces)
+        st.session_state.hist["liion"].append(sum(st.session_state.bat))
+
+        for k in st.session_state.hist:
+            st.session_state.hist[k] = st.session_state.hist[k][-96:]
+
+        return {
+            "solar": solar,
+            "ground": ground,
+            "demand": demand,
+            "status": status,
+            "transfer": transfer,
+            "cces_charge": ccharge,
+            "cces_discharge": cdis
+        }
+
+    if st.session_state.running:
+        data=run_step()
+    else:
+        solar,ground,demand=get_values()
+        data={"solar":solar,"ground":ground,"demand":demand,
+              "status":["idle"]*5,"transfer":[0]*5,
+              "cces_charge":0,"cces_discharge":0}
+
+    # ============================================================
+    # HTML DASHBOARD
+    # This is deliberately built to mirror the supplied reference:
+    # left solar panels | central flow | right summary
+    # then 5 neighbourhood cards | four 24-hour charts.
+    # ============================================================
+    def esc(x):
+        return str(x).replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+
+    solar=data["solar"]; ground=data["ground"]; demand=data["demand"]
+    total_solar=sum(solar)+ground; total_demand=sum(demand)
+    total_bat=sum(st.session_state.bat)
+
+    def battery_badge(i):
+        s=data["status"][i]
+        if s=="charging": return '<span class="badge charge">⚡ CHARGING</span>'
+        if s=="discharging": return '<span class="badge discharge">⚡ DISCHARGING</span>'
+        return '<span class="badge idle">IDLE</span>'
+
+    def svg_arrow(color, direction="down"):
+        return "↓" if direction=="down" else "↑"
+
+    # Build neighbourhood HTML.
+    nb_html=""
+    for i in range(5):
+        stt=data["status"][i]
+        frac=st.session_state.bat[i]/4
+        if data["status"][i]=="discharging":
+            middle=f'<div class="flowarrow blue">↑</div><div class="flowlabel blue">Li-ion → Consumers</div>'
+        elif demand[i] > solar[i]:
+            middle=f'<div class="flowarrow blue">↑</div><div class="flowlabel blue">CCES → Consumers</div>'
+        else:
+            middle=f'<div class="flowarrow orange">↑</div><div class="flowlabel orange">Excess → CCES</div>'
+        if stt=="charging":
+            batt=f'<div class="mini-flow"><span class="flowarrow green">↑</span><span>Solar → Li-ion</span></div>'
+        elif stt=="discharging":
+            batt=f'<div class="mini-flow"><span class="flowarrow blue">↓</span><span>Li-ion → Consumers</span></div>'
+        else:
+            batt=f'<div class="mini-flow"><span class="flowarrow gray">•</span><span>Li-ion idle</span></div>'
+
+        support=""
+        if data["transfer"][i]>.01:
+            support='<div class="support">← OTHER NB Li-ion SUPPORT</div>'
+        elif data["transfer"][i]<-.01:
+            support='<div class="support">OTHER NB Li-ion →</div>'
+
+        nb_html+=f"""
+        <div class="nbcard">
+          <div class="nbhead nb{i}">
+            <span class="house">⌂</span>
+            <span><b>Neighbourhood {i+1}</b><br><small>4,000 consumers</small></span>
+          </div>
+          <div class="nbbody">
+            <div class="row"><span>☀️ Rooftop Solar Generation</span><b>{solar[i]:.1f} MW</b></div>
+            <div class="row"><span>▥ Current Demand</span><b>{demand[i]:.1f} MW</b></div>
+            <div class="row"><span>🔋 Li-ion Battery</span><b>{st.session_state.bat[i]:.1f} / 4 MWh ({frac*100:.0f}%)</b></div>
+            <div class="bar"><i style="width:{frac*100:.1f}%"></i></div>
+            {battery_badge(i)}
+            <div class="pf">Power Flow (Current)</div>
+            <div class="flowgrid">
+              <div><div class="flowarrow green">↓</div><b>{solar[i]:.1f} MW</b><small>from Solar</small></div>
+              <div><div class="flowarrow {'blue' if demand[i]>solar[i] else 'orange'}">
+                 {'↑' if demand[i]>solar[i] else '↓'}</div>
+                 <b>{abs(demand[i]-solar[i]):.1f} MW</b>
+                 <small>{'from CCES' if demand[i]>solar[i] else 'to CCES'}</small></div>
+              <div><div class="flowarrow {'blue' if stt=='discharging' else 'green'}">
+                 {'↓' if stt=='discharging' else '↑' if stt=='charging' else '•'}</div>
+                 <b>{'ACTIVE' if stt!='idle' else '—'}</b>
+                 <small>{'Li-ion' if stt!='idle' else 'idle'}</small></div>
+            </div>
+            {support}
+          </div>
+        </div>
+        """
+
+    # Simple SVG line chart builder.
+    def chart_svg(title, values, color, ymax, unit):
+        if not values:
+            values=[0,0]
+        vals=values[-96:]
+        w,h=360,120
+        left,top=30,20
+        pw,ph=320,78
+        pts=[]
+        for j,v in enumerate(vals):
+            x=left+(j/max(1,len(vals)-1))*pw
+            y=top+ph-(max(0,min(ymax,v))/ymax)*ph
+            pts.append(f"{x:.1f},{y:.1f}")
+        poly=" ".join(pts)
+        return f"""
+        <div class="chartbox">
+          <div class="charttitle">{title}</div>
+          <svg viewBox="0 0 {w} {h}" width="100%" height="120">
+            <line x1="{left}" y1="{top+ph}" x2="{left+pw}" y2="{top+ph}" stroke="#dbe4ee"/>
+            <line x1="{left}" y1="{top}" x2="{left}" y2="{top+ph}" stroke="#dbe4ee"/>
+            <polyline points="{poly}" fill="none" stroke="{color}" stroke-width="3"/>
+            <text x="{left}" y="116" font-size="9" fill="#64748b">12 AM</text>
+            <text x="{left+pw/2}" y="116" font-size="9" fill="#64748b" text-anchor="middle">12 PM</text>
+            <text x="{left+pw}" y="116" font-size="9" fill="#64748b" text-anchor="end">12 AM</text>
+          </svg>
+        </div>
+        """
+
+    hist=st.session_state.hist
+    if not hist["solar"]:
+        # Reference curves until simulation has produced history.
+        hours=[i/4 for i in range(97)]
+        hist_s=[30*max(0,math.sin(math.pi*(h-5.5)/13)) if 5.5<=h<=18.5 else 0 for h in hours]
+        hist_d=[8+7*max(0,math.sin(math.pi*(h-7)/14))+4*(1 if h>=18 else 0) for h in hours]
+        hist_c=[60-32*max(0,math.sin(math.pi*(h-6)/12)) if 6<=h<=18 else 60 for h in hours]
+        hist_l=[8+6*max(0,math.sin(math.pi*(h-6)/12)) if 6<=h<=18 else 8 for h in hours]
+    else:
+        hist_s=hist["solar"];hist_d=hist["demand"];hist_c=hist["cces"];hist_l=hist["liion"]
+
+    html=f"""
+    <style>
+    .dashboard{{font-family:Arial,Helvetica,sans-serif;color:#10243e;background:#f4f7fb}}
+    .panel{{background:#fff;border:1px solid #b9c7d8;border-radius:11px;padding:9px 11px;box-sizing:border-box}}
+    .gridtop{{display:grid;grid-template-columns:1.7fr 2.0fr 1.25fr;gap:8px}}
+    .main{{display:grid;grid-template-columns:1.0fr 3.35fr 1.18fr;gap:7px;margin-top:6px}}
+    .nbs{{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:6px}}
+    .charts{{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}}
+    .title{{font-size:18px;font-weight:800;margin-bottom:10px}}
+    .sub{{font-size:11px;color:#64748b}}
+    .kv{{display:flex;justify-content:space-between;font-size:11px;margin:9px 0}}
+    .bar{{height:10px;background:#e6edf5;border-radius:6px;overflow:hidden;margin:5px 0 8px}}
+    .bar i{{display:block;height:100%;background:#16a34a;border-radius:6px}}
+    .orangebar i{{background:#f59e0b}}
+    .bluebar i{{background:#1677e8}}
+    .solarbox,.flowbox{{border:1px solid #b9c7d8;border-radius:10px;padding:12px;text-align:center;background:#fff}}
+    .flowbox{{min-height:82px}}
+    .cces{{min-height:190px}}
+    .big{{font-size:17px;font-weight:800}}
+    .legend{{font-size:9px;font-weight:800;margin-left:10px}}
+    .green{{color:#16a34a}} .blue{{color:#1677e8}} .orange{{color:#f59e0b}} .red{{color:#ef233c}} .gray{{color:#94a3b8}}
+    .flowrow{{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center}}
+    .bus{{height:5px;background:#334155;border-radius:4px;margin:9px 0}}
+    .nbcard{{background:#fff;border:1px solid #b9c7d8;border-radius:11px;overflow:hidden}}
+    .nbhead{{padding:9px 10px;display:flex;align-items:center;gap:8px;font-size:13px}}
+    .nb0{{background:#ffd7d7}} .nb1{{background:#d8e9ff}} .nb2{{background:#dcfce7}} .nb3{{background:#fff0c2}} .nb4{{background:#eadcff}}
+    .house{{font-size:24px;font-weight:900}}
+    .nbhead small{{font-size:9px;color:#334155}}
+    .nbbody{{padding:9px 10px}}
+    .row{{display:flex;justify-content:space-between;gap:5px;font-size:9px;margin:8px 0}}
+    .row b{{font-size:9px}}
+    .badge{{display:block;border-radius:7px;text-align:center;padding:5px;font-size:9px;font-weight:800;margin:7px 0}}
+    .charge{{background:#dcfce7;color:#16a34a}} .discharge{{background:#dbeafe;color:#1677e8}} .idle{{background:#eef2f7;color:#64748b}}
+    .pf{{font-size:9px;font-weight:800;color:#64748b;margin-top:9px}}
+    .flowgrid{{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;text-align:center;margin-top:3px}}
+    .flowarrow{{font-size:25px;line-height:24px;font-weight:900}}
+    .flowgrid b{{display:block;font-size:8px}}
+    .flowgrid small{{display:block;font-size:7px;color:#64748b}}
+    .support{{background:#fff7ed;color:#c2410c;border-radius:6px;text-align:center;padding:4px;font-size:7px;font-weight:800;margin-top:7px}}
+    .chartbox{{background:#fff;border:1px solid #b9c7d8;border-radius:10px;padding:6px}}
+    .charttitle{{font-size:10px;font-weight:800;margin-left:5px}}
+    @media(max-width:1100px){{
+     .gridtop,.main{{grid-template-columns:1fr}}
+     .nbs,.charts{{grid-template-columns:repeat(2,1fr)}}
+    }}
+    </style>
+
+    <div class="dashboard">
+
+    <div class="main">
       <div>
-        <div class="flowbox"><div style="font-size:28px">☀️</div><b>Rooftop Solar</b><br><span class="sub">28 MW capacity</span></div>
-        <div class="flowarrow green">→ {sum(solar)+ground:.1f} MW</div>
-        <div class="flowbox"><div style="font-size:28px">☀️</div><b>Solar Farm</b><br><span class="sub">12 MW capacity</span></div>
+        <div class="panel">
+          <div class="title">Total Solar Generation</div>
+          <div class="kv"><span>Total Rooftop Capacity</span><b>28 MW</b></div>
+          <div class="kv"><span>Total Solar Generation</span><b>{total_solar:.1f} MW</b></div>
+          <div class="bar orangebar"><i style="width:{min(100,total_solar/40*100):.1f}%"></i></div>
+          <div style="text-align:right;font-size:9px;color:#64748b">{total_solar/40*100:.0f}% of 40 MW total capacity</div>
+        </div>
+        <div class="panel" style="margin-top:8px">
+          <div class="title">Solar Farm (CCES Ground)</div>
+          <div class="kv"><span>Total Capacity</span><b>12 MW</b></div>
+          <div class="kv"><span>Current Generation</span><b>{ground:.1f} MW</b></div>
+          <div class="bar"><i style="width:{ground/12*100:.1f}%"></i></div>
+          <div style="text-align:right;font-size:9px;color:#64748b">{ground/12*100:.0f}%</div>
+        </div>
       </div>
-      <div class="flowbox cces">
-        <div class="big">Central Energy Station</div>
-        <div class="sub">(CCES)</div>
-        <div style="font-size:50px;margin-top:8px">🛢️</div>
-        <b>CCES 80 MWh</b>
+
+      <div class="panel">
+        <div class="title">Power Flow Diagram (Real-time)
+          <span class="legend green">━━► Solar</span>
+          <span class="legend blue">━━► CCES → NB</span>
+          <span class="legend orange">━━► Li-ion</span>
+        </div>
+
+        <div class="flowrow">
+          <div>
+            <div class="flowbox"><div style="font-size:28px">☀️</div><b>Rooftop Solar</b><br><span class="sub">28 MW capacity</span></div>
+            <div class="flowarrow green">→ {sum(solar)+ground:.1f} MW</div>
+            <div class="flowbox"><div style="font-size:28px">☀️</div><b>Solar Farm</b><br><span class="sub">12 MW capacity</span></div>
+          </div>
+          <div class="flowbox cces">
+            <div class="big">Central Energy Station</div>
+            <div class="sub">(CCES)</div>
+            <div style="font-size:50px;margin-top:8px">🛢️</div>
+            <b>CCES 80 MWh</b>
+            <div class="bar"><i style="width:{st.session_state.cces/80*100:.1f}%"></i></div>
+            <b>{st.session_state.cces:.1f} / 80 MWh ({st.session_state.cces/80*100:.0f}%)</b>
+          </div>
+        </div>
+
+        <div class="bus"></div>
+      </div>
+
+      <div class="panel">
+        <div class="title">System Summary (Current)</div>
+        <div class="kv"><span>Total Solar Generation</span><b>{total_solar:.1f} MW</b></div>
+        <div class="kv"><span>Total Demand</span><b>{total_demand:.1f} MW</b></div>
+        <div class="kv"><span>Charging CCES</span><b class="green">{data["cces_charge"]:.1f} MW</b></div>
+        <div class="kv"><span>Discharging CCES</span><b class="blue">{data["cces_discharge"]:.1f} MW</b></div>
+        <div class="kv"><span>CCES State of Charge</span><b>{st.session_state.cces:.1f}/80 MWh</b></div>
         <div class="bar"><i style="width:{st.session_state.cces/80*100:.1f}%"></i></div>
-        <b>{st.session_state.cces:.1f} / 80 MWh ({st.session_state.cces/80*100:.0f}%)</b>
+        <div class="kv"><span>Total Li-ion Charge</span><b>{total_bat:.1f}/20 MWh</b></div>
+        <div class="bar bluebar"><i style="width:{total_bat/20*100:.1f}%"></i></div>
+
+        <div class="summary-time">
+          <div class="summary-time-label">SIMULATION TIME</div>
+          <div class="summary-time-value">{dh}:{mm:02d} {ap}</div>
+          <div class="summary-time-state">
+            {"☀ DAY · SOLAR ACTIVE" if day else "☾ NIGHT · CCES SUPPLY"}
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="bus"></div>
-  </div>
+    <div class="nbs">{nb_html}</div>
 
-  <div class="panel">
-    <div class="title">System Summary (Current)</div>
-    <div class="kv"><span>Total Solar Generation</span><b>{total_solar:.1f} MW</b></div>
-    <div class="kv"><span>Total Demand</span><b>{total_demand:.1f} MW</b></div>
-    <div class="kv"><span>Charging CCES</span><b class="green">{data["cces_charge"]:.1f} MW</b></div>
-    <div class="kv"><span>Discharging CCES</span><b class="blue">{data["cces_discharge"]:.1f} MW</b></div>
-    <div class="kv"><span>CCES State of Charge</span><b>{st.session_state.cces:.1f}/80 MWh</b></div>
-    <div class="bar"><i style="width:{st.session_state.cces/80*100:.1f}%"></i></div>
-    <div class="kv"><span>Total Li-ion Charge</span><b>{total_bat:.1f}/20 MWh</b></div>
-    <div class="bar bluebar"><i style="width:{total_bat/20*100:.1f}%"></i></div>
-
-    <div class="summary-time">
-      <div class="summary-time-label">SIMULATION TIME</div>
-      <div class="summary-time-value">{dh}:{mm:02d} {ap}</div>
-      <div class="summary-time-state">
-        {"☀ DAY · SOLAR ACTIVE" if day else "☾ NIGHT · CCES SUPPLY"}
-      </div>
+    <div class="charts">
+    {chart_svg("Total Solar Generation (MW)",hist_s,"#f59e0b",40,"MW")}
+    {chart_svg("Total Demand (MW)",hist_d,"#ef233c",30,"MW")}
+    {chart_svg("CCES State of Charge (MWh)",hist_c,"#16a34a",80,"MWh")}
+    {chart_svg("Total Li-ion State of Charge (MWh)",hist_l,"#1677e8",20,"MWh")}
     </div>
-  </div>
-</div>
+    </div>
+    """
 
-<div class="nbs">{nb_html}</div>
+    components.html(html,height=900,scrolling=False)
 
-<div class="charts">
-{chart_svg("Total Solar Generation (MW)",hist_s,"#f59e0b",40,"MW")}
-{chart_svg("Total Demand (MW)",hist_d,"#ef233c",30,"MW")}
-{chart_svg("CCES State of Charge (MWh)",hist_c,"#16a34a",80,"MWh")}
-{chart_svg("Total Li-ion State of Charge (MWh)",hist_l,"#1677e8",20,"MWh")}
-</div>
-</div>
-"""
+    # Fragment-scoped refresh: only the simulation/dashboard fragment reruns,
+    # preventing the entire Streamlit page from flickering while the simulation runs.
+    if st.session_state.running:
+        time.sleep(max(0.08,0.35/st.session_state.speed))
+        st.rerun(scope="fragment")
 
-components.html(html,height=900,scrolling=False)
 
-# Automatic refresh.
-if st.session_state.running:
-    time.sleep(max(0.08,0.35/st.session_state.speed))
-    st.rerun()
+simulation_ui()
