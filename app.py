@@ -663,11 +663,9 @@ def simulation_ui():
 
     components.html(html,height=900,scrolling=False)
 
-    # Fragment-scoped refresh: only the simulation/dashboard fragment reruns,
-    # preventing the entire Streamlit page from flickering while the simulation runs.
+    # Automatic refresh.
     if st.session_state.running:
         time.sleep(max(0.08,0.35/st.session_state.speed))
-        st.rerun(scope="fragment")
-
+        st.rerun()
 
 simulation_ui()
